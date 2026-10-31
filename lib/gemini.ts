@@ -23,10 +23,12 @@ export class GeminiError extends Error {
   }
 }
 
+// Current stable models as of late 2026. Gemini 2.0 is shut down and 2.5 is
+// restricted to existing users, so a brand-new key needs 3.x.
 const DEFAULT_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash",
+  "gemini-3.6-flash",
 ];
 
 function modelChain(): string[] {
@@ -151,19 +153,23 @@ export async function generateJson<T>(request: JsonRequest<T>): Promise<T> {
           config: {
             systemInstruction: request.system,
             temperature: request.temperature ?? 0.15,
-            maxOutputTokens: request.maxOutputTokens ?? 4096,
+            // Thinking tokens share this budget on Gemini 3, so keep it generous.
+            maxOutputTokens: request.maxOutputTokens ?? 8192,
             responseMimeType: "application/json",
             abortSignal: AbortSignal.timeout(timeoutMs),
-            ...(model.startsWith("gemini-2.5-flash")
-              ? { thinkingConfig: { thinkingBudget: 0 } }
-              : {}),
           },
         });
         raw = readText(response);
       } catch (error) {
         const classified = classify(error);
         lastError = classified;
-        if (classified.retryable && attempt === 0) {
+        // A timeout or an exhausted quota will not recover in 800 ms: move on
+        // to the next model instead of burning the request's time budget twice.
+        const worthRetrying =
+          classified.retryable &&
+          classified.code !== "TIMEOUT" &&
+          classified.code !== "QUOTA";
+        if (worthRetrying && attempt === 0) {
           await new Promise((resolve) => setTimeout(resolve, 800));
           continue;
         }

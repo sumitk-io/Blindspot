@@ -617,6 +617,7 @@ export async function analyze(
   deps: AnalyzeDeps = defaultDeps,
 ): Promise<AnalyzeResult> {
   const now = input.now ?? new Date();
+  const startedAt = Date.now();
   const modelNotes: string[] = [];
   const sources = input.sources.map(toSource);
 
@@ -646,7 +647,8 @@ export async function analyze(
   const localConflicts = valueConflicts(claims, aspects);
 
   let modelled: { aspectId: string; claimA: string; claimB: string; summary: string }[] = [];
-  if (claimsFromModel && claims.length >= 2) {
+  const elapsed = Date.now() - startedAt;
+  if (claimsFromModel && claims.length >= 2 && elapsed < 30_000) {
     const candidates: ConflictCandidate[] = claims.slice(0, 24).map((claim) => ({
       id: claim.id,
       aspectId: claim.aspectId,
@@ -661,6 +663,8 @@ export async function analyze(
         `conflicts: ${error instanceof Error ? error.message.slice(0, 120) : "model call failed"}`,
       );
     }
+  } else if (claimsFromModel && claims.length >= 2) {
+    modelNotes.push("conflicts: model audit skipped to stay inside the time budget");
   }
 
   const conflicts = mergeConflicts(localConflicts, modelled, claims, aspects);

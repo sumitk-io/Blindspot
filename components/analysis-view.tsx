@@ -427,13 +427,6 @@ export default function AnalysisView({
                             <p className="mt-1 text-xs leading-relaxed text-muted">
                               {finding.detail}
                             </p>
-                            <button
-                              type="button"
-                              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand"
-                            >
-                              View details
-                              <ChevronDown className="size-3.5 -rotate-90" aria-hidden="true" />
-                            </button>
                           </div>
                         ))}
                       </div>

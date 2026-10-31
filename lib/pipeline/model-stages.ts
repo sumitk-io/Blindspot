@@ -117,8 +117,8 @@ export async function decomposeAspects(question: string): Promise<AspectDecompos
       prompt: `Question: ${question}\n\nReturn JSON: { "aspects": [ { "label": string, "why": string, "keywords": string[] } ] }`,
       schema: AspectReply,
       temperature: 0.2,
-      maxOutputTokens: 1200,
-      timeoutMs: 30_000,
+      maxOutputTokens: 4096,
+      timeoutMs: 15_000,
     });
 
     const seen = new Set<string>();
@@ -272,8 +272,8 @@ export async function extractClaims(
     ].join("\n"),
     schema: ClaimReply,
     temperature: 0.1,
-    maxOutputTokens: 8000,
-    timeoutMs: 90_000,
+    maxOutputTokens: 16_000,
+    timeoutMs: 35_000,
   });
 
   return reply.claims;
@@ -335,8 +335,8 @@ export async function auditConflicts(candidates: ConflictCandidate[]): Promise<M
     prompt: `Claims:\n${lines}\n\nReturn JSON: { "conflicts": [ { "aspectId": string, "claimA": string, "claimB": string, "summary": string } ] } using the claim ids exactly.`,
     schema: ConflictReply,
     temperature: 0.1,
-    maxOutputTokens: 2000,
-    timeoutMs: 45_000,
+    maxOutputTokens: 6000,
+    timeoutMs: 20_000,
   });
 
   return reply.conflicts;
