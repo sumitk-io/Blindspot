@@ -24,6 +24,8 @@ interface DraftSource {
   id: string;
   domain: string;
   url: string;
+  kind: "url" | "text";
+  text?: string;
   authority: Authority;
   status: "checking" | "ok" | "failed";
   code?: string;
@@ -36,6 +38,7 @@ const initialSources: DraftSource[] = [
     id: "d1",
     domain: "chevening.org",
     url: "https://www.chevening.org/scholarships/",
+    kind: "url",
     authority: "official",
     status: "checking",
   },
@@ -43,6 +46,7 @@ const initialSources: DraftSource[] = [
     id: "d2",
     domain: "en.wikipedia.org",
     url: "https://en.wikipedia.org/wiki/Scholarship",
+    kind: "url",
     authority: "secondary",
     status: "checking",
   },
@@ -50,6 +54,7 @@ const initialSources: DraftSource[] = [
     id: "d3",
     domain: "gatescambridge.org",
     url: "https://www.gatescambridge.org/",
+    kind: "url",
     authority: "official",
     status: "checking",
   },
@@ -171,6 +176,7 @@ export default function AskPage() {
         id,
         domain,
         url: normalized,
+        kind: "url",
         authority: inferAuthority(domain),
         status: "checking",
       },
@@ -179,6 +185,34 @@ export default function AskPage() {
     setAddingSource(false);
     setError(null);
     void verifySource(id, normalized);
+  }
+
+  function addPastedText() {
+    const text = pastedText.trim();
+    if (text.length < 300) {
+      setError("Paste at least a few paragraphs (about 300 characters) so there is something to audit.");
+      return;
+    }
+    if (sources.length >= 6) {
+      setError("Six sources is the limit for one analysis.");
+      return;
+    }
+
+    setSources((current) => [
+      ...current,
+      {
+        id: `p${Date.now()}`,
+        domain: "Pasted text",
+        url: "pasted-text",
+        kind: "text",
+        text,
+        authority: "secondary",
+        status: "ok",
+      },
+    ]);
+    setPastedText("");
+    setPasteMode(false);
+    setError(null);
   }
 
   function removeSource(id: string) {
@@ -215,15 +249,17 @@ export default function AskPage() {
         body: JSON.stringify({
           question: question.trim(),
           sources: sources.map((source) =>
-            source.status === "failed"
-              ? {
-                  url: source.url,
-                  failed: {
-                    code: source.code ?? "NETWORK_ERROR",
-                    message: source.note ?? "This source could not be read.",
-                  },
-                }
-              : { url: source.url },
+            source.kind === "text"
+              ? { text: source.text ?? "", label: source.domain }
+              : source.status === "failed"
+                ? {
+                    url: source.url,
+                    failed: {
+                      code: source.code ?? "NETWORK_ERROR",
+                      message: source.note ?? "This source could not be read.",
+                    },
+                  }
+                : { url: source.url },
           ),
         }),
       });
@@ -335,9 +371,18 @@ export default function AskPage() {
                 source.status === "failed" ? "border-conflict/40 bg-rose-50/40" : "border-line",
               )}
             >
-              <Link2 className="size-4 shrink-0 text-missing" aria-hidden="true" />
+              {source.kind === "text" ? (
+                <FileText className="size-4 shrink-0 text-missing" aria-hidden="true" />
+              ) : (
+                <Link2 className="size-4 shrink-0 text-missing" aria-hidden="true" />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-ink">{source.domain}</p>
+                {source.kind === "text" ? (
+                  <p className="truncate text-xs text-muted">
+                    Pasted text · {(source.text ?? "").length.toLocaleString()} characters
+                  </p>
+                ) : null}
                 {source.status === "checking" ? (
                   <p className="text-xs text-muted">Checking the page…</p>
                 ) : null}
@@ -362,7 +407,7 @@ export default function AskPage() {
         </div>
 
         {pasteMode ? (
-          <div className="mt-3 rounded-xl border border-line">
+          <div className="mt-3 rounded-xl border border-line p-3">
             <textarea
               value={pastedText}
               onChange={(event) => setPastedText(event.target.value)}
@@ -370,6 +415,19 @@ export default function AskPage() {
               placeholder="Paste the text of a page that cannot be fetched. It will be treated as a snapshot."
               className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm text-ink outline-none placeholder:text-missing"
             />
+            <div className="flex items-center justify-between gap-3 px-1">
+              <span className="text-xs text-muted">
+                {pastedText.trim().length.toLocaleString()} characters
+                {pastedText.trim().length < 300 ? " · need about 300" : ""}
+              </span>
+              <button
+                type="button"
+                onClick={addPastedText}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              >
+                Add pasted source
+              </button>
+            </div>
           </div>
         ) : null}
 

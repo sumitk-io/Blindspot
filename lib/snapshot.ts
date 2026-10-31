@@ -61,6 +61,40 @@ export function failedSnapshot(
 }
 
 /**
+ * Freeze text the user pasted, for pages that block automated fetching.
+ * Same shape as a fetched snapshot so the rest of the pipeline cannot tell
+ * the difference.
+ */
+export function snapshotFromText(text: string, label: string): SourceSnapshot {
+  const id = randomUUID();
+  const cleaned = normalizeText(text);
+  const name = label.trim() || "Pasted text";
+  const ok = cleaned.length >= 300;
+
+  return {
+    id,
+    url: "pasted-text",
+    finalUrl: "pasted-text",
+    domain: name.slice(0, 48),
+    title: name.slice(0, 120),
+    siteName: null,
+    text: cleaned,
+    sha256: createHash("sha256").update(cleaned).digest("hex"),
+    fetchedAt: new Date().toISOString(),
+    publishedAt: null,
+    dateConfidence: "none",
+    contentType: "text/plain",
+    bytes: Buffer.byteLength(cleaned, "utf8"),
+    truncated: false,
+    status: ok ? "ok" : "failed",
+    errorCode: ok ? undefined : "EMPTY_CONTENT",
+    errorMessage: ok
+      ? undefined
+      : "Pasted text is too short to audit. Paste at least a few paragraphs.",
+  };
+}
+
+/**
  * Fetch a URL and freeze everything a finding might later point at:
  * cleaned text, content hash, fetch time and the best available date.
  * Never throws: a failed source is returned with a status and a reason.

@@ -210,21 +210,14 @@ export function buildClaimContext(
     .map((snapshot) => ({
       snapshot,
       authority: authorityOf(snapshot),
-      excerpt: selectContext(snapshot.text, queries, { maxChunks: 8, perAspect: 2 }).text.slice(
-        0,
-        perSource,
-      ),
+      excerpt: selectContext(snapshot.text, queries, { maxChunks: 8, perAspect: 2 }).text,
     }))
     .sort((a, b) => AUTHORITY_ORDER[a.authority] - AUTHORITY_ORDER[b.authority]);
 
-  let used = 0;
-  const kept: ClaimContextSource[] = [];
-  for (const context of contexts) {
-    if (used + context.excerpt.length > total && kept.length > 0) break;
-    kept.push(context);
-    used += context.excerpt.length;
-  }
-  return kept;
+  // Every readable source must stay represented: shrink the per-source window
+  // instead of dropping the least authoritative sources.
+  const cap = Math.max(2_000, Math.min(perSource, Math.floor(total / Math.max(contexts.length, 1))));
+  return contexts.map((context) => ({ ...context, excerpt: context.excerpt.slice(0, cap) }));
 }
 
 const CLAIM_SYSTEM = [

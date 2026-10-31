@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildSnapshot, failedSnapshot, type SourceSnapshot } from "@/lib/snapshot";
+import { buildSnapshot, failedSnapshot, snapshotFromText, type SourceSnapshot } from "@/lib/snapshot";
 import { analyze } from "@/lib/pipeline/analyze";
 import { GeminiError } from "@/lib/gemini";
 import { rateLimit } from "@/lib/rate-limit";
@@ -7,10 +7,19 @@ import type { FetchErrorCode } from "@/lib/safe-fetch";
 
 export const maxDuration = 60;
 
-interface SourceInput {
+interface SourceUrlInput {
+  kind: "url";
   url: string;
   failed?: { code: FetchErrorCode; message: string };
 }
+
+interface SourceTextInput {
+  kind: "text";
+  text: string;
+  label: string;
+}
+
+type SourceInput = SourceUrlInput | SourceTextInput;
 
 const MAX_SOURCES = 6;
 const PER_IP_DISPLAY = 5;
@@ -45,6 +54,20 @@ function parseSources(input: unknown): SourceInput[] {
   for (const item of input) {
     if (!item || typeof item !== "object") continue;
     const record = item as Record<string, unknown>;
+
+    const text = typeof record.text === "string" ? record.text.trim() : "";
+    if (text.length >= 50) {
+      const label =
+        typeof record.label === "string" && record.label.trim()
+          ? record.label.trim().slice(0, 60)
+          : "Pasted text";
+      const key = `text:${text.slice(0, 160)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push({ kind: "text", text: text.slice(0, 200_000), label });
+      continue;
+    }
+
     const url = typeof record.url === "string" ? record.url.trim() : "";
     if (!url || seen.has(url)) continue;
     seen.add(url);
@@ -54,6 +77,7 @@ function parseSources(input: unknown): SourceInput[] {
     const message = failure?.message;
 
     output.push({
+      kind: "url",
       url,
       failed:
         isFetchCode(code) && typeof message === "string"
@@ -139,11 +163,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const snapshots: SourceSnapshot[] = await mapLimit(sources, 3, async (source) =>
-    source.failed
+  const snapshots: SourceSnapshot[] = await mapLimit(sources, 3, async (source) => {
+    if (source.kind === "text") return snapshotFromText(source.text, source.label);
+    return source.failed
       ? failedSnapshot(source.url, source.failed.code, source.failed.message)
-      : buildSnapshot(source.url),
-  );
+      : buildSnapshot(source.url);
+  });
 
   if (!snapshots.some((snapshot) => snapshot.status === "ok")) {
     return NextResponse.json(

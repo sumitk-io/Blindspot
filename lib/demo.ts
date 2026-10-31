@@ -1,3 +1,4 @@
+import saved from "./demo-saved.json";
 import type { AnalysisData, Aspect, Cell, CellState, Source } from "@/lib/types";
 
 export const aspects: Aspect[] = [
@@ -64,7 +65,7 @@ export const cells: Cell[] = sources.flatMap((source) =>
   })),
 );
 
-export const demoAnalysis: AnalysisData = {
+const mockAnalysis: AnalysisData = {
   question: "What should I verify before applying for this scholarship?",
   statusLine: "4 of 5 sources read · 1 failed (HTTP 403) · running in reduced confidence",
   reducedConfidence: true,
@@ -131,3 +132,22 @@ export const demoAnalysis: AnalysisData = {
 };
 
 export type { AnalysisData };
+
+type SavedDemo = Partial<AnalysisData> & { savedAt?: string | null };
+
+const savedDemo = saved as SavedDemo;
+
+/**
+ * `/analysis/demo` serves a frozen real run once `npm run demo:save` has been
+ * executed. Until then it falls back to the hand-written mock so the route
+ * always renders.
+ */
+export const demoAnalysis: AnalysisData =
+  savedDemo.savedAt &&
+  Array.isArray(savedDemo.aspects) &&
+  Array.isArray(savedDemo.cells) &&
+  Array.isArray(savedDemo.sources)
+    ? (savedDemo as AnalysisData)
+    : mockAnalysis;
+
+export const demoIsReal = Boolean(savedDemo.savedAt);

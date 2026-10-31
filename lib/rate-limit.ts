@@ -8,7 +8,9 @@
 
 const WINDOW_MS = 60 * 60 * 1000;
 const PER_IP_LIMIT = 5;
-const DAILY_LIMIT = Number(process.env.DAILY_ANALYSIS_CAP ?? 200);
+const configuredDaily = Number(process.env.DAILY_ANALYSIS_CAP ?? 200);
+const DAILY_LIMIT =
+  Number.isFinite(configuredDaily) && configuredDaily > 0 ? configuredDaily : 200;
 
 interface Bucket {
   hits: number[];

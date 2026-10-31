@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "smoke:fetch": "node --no-warnings scripts/smoke-fetch.mts",
-    "smoke:extract": "tsx scripts/smoke-extract.mts"
+    "smoke:extract": "tsx scripts/smoke-extract.mts",
+    "smoke:text": "tsx scripts/smoke-text.mts",
+    "smoke:pipeline": "tsx scripts/smoke-pipeline.mts",
+    "smoke:limits": "tsx scripts/smoke-rate-limit.mts",
+    "smoke:all": "npm run smoke:fetch && npm run smoke:text && npm run smoke:pipeline && npm run smoke:limits",
+    "demo:save": "tsx scripts/save-demo.mts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
