@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke:fetch": "node --no-warnings scripts/smoke-fetch.mts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
