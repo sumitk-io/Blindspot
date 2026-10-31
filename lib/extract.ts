@@ -10,6 +10,9 @@ export interface Extracted {
   byline: string | null;
   publishedAt: string | null;
   dateConfidence: DateConfidence;
+  /** Last revision date, when the page declares one. */
+  updatedAt: string | null;
+  updatedConfidence: DateConfidence;
 }
 
 const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g;
@@ -83,6 +86,15 @@ function visibleDate(text: string): string | null {
   const sample = text.slice(0, 6000);
   const pattern =
     /(?:last\s+updated|last\s+revised|updated|published|posted)\s*(?:on|:)?\s*([A-Z][a-z]{2,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Z][a-z]{2,9}\s+\d{4}|\d{4}-\d{2}-\d{2})/i;
+  const match = pattern.exec(sample);
+  return match ? toIso(match[1]) : null;
+}
+
+/** Only matches wording that means "this was revised", not "this was posted". */
+function visibleUpdated(text: string): string | null {
+  const sample = text.slice(0, 6000);
+  const pattern =
+    /(?:last\s+updated|last\s+revised|last\s+modified|last\s+edited|page\s+updated)\s*(?:on|:)?\s*([A-Z][a-z]{2,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Z][a-z]{2,9}\s+\d{4}|\d{4}-\d{2}-\d{2})/i;
   const match = pattern.exec(sample);
   return match ? toIso(match[1]) : null;
 }
@@ -162,6 +174,26 @@ export function extractFromHtml(
     }
   }
 
+  // A revision date is a stronger freshness signal than a publish date: an
+  // encyclopedia entry keeps its 2003 creation date forever while its content
+  // is edited daily.
+  let updatedAt: string | null = null;
+  let updatedConfidence: DateConfidence = "none";
+
+  const updatedCandidates: [string | null, DateConfidence][] = [
+    [ld.modified, "high"],
+    [metaModified, "high"],
+    [visibleUpdated(text), "low"],
+  ];
+
+  for (const [value, confidence] of updatedCandidates) {
+    if (value) {
+      updatedAt = value;
+      updatedConfidence = confidence;
+      break;
+    }
+  }
+
   return {
     title: normalizeText(title) || url,
     text,
@@ -169,5 +201,7 @@ export function extractFromHtml(
     byline,
     publishedAt,
     dateConfidence,
+    updatedAt,
+    updatedConfidence,
   };
 }

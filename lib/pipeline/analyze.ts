@@ -9,6 +9,7 @@ import type {
   Source,
 } from "@/lib/types";
 import type { SourceSnapshot } from "@/lib/snapshot";
+import type { DateConfidence } from "@/lib/extract";
 import {
   buildClaimContext,
   decomposeAspects,
@@ -369,6 +370,52 @@ interface StaleFinding {
 
 const DEADLINE_HINT = /\b(deadline|last date|closing date|closes|apply by|due date|expires?|expiry)\b/i;
 
+/** Sites that keep a creation date forever while the body is edited daily. */
+const ENCYCLOPEDIA = /(^|\.)(wikipedia\.org|wiktionary\.org|wikiwand\.com|britannica\.com|fandom\.com)$/;
+
+function newestYearIn(text: string): number | null {
+  let newest: number | null = null;
+  for (const match of text.matchAll(/\b(19\d{2}|20\d{2})\b/g)) {
+    const year = Number(match[1]);
+    if (year < 1990 || year > 2100) continue;
+    if (newest === null || year > newest) newest = year;
+  }
+  return newest;
+}
+
+interface DateSignal {
+  iso: string;
+  label: "published" | "last updated";
+  confidence: DateConfidence;
+}
+
+/**
+ * Choose the date that best represents how current a page is. A revision date
+ * beats a publish date, because a page edited yesterday is current even if it
+ * was first published years ago.
+ */
+function freshnessSignal(snapshot: SourceSnapshot): DateSignal | null {
+  const published = snapshot.publishedAt ? new Date(snapshot.publishedAt) : null;
+  const updated = snapshot.updatedAt ? new Date(snapshot.updatedAt) : null;
+
+  const validPublished =
+    published && !Number.isNaN(published.getTime())
+      ? { iso: snapshot.publishedAt as string, at: published, confidence: snapshot.dateConfidence }
+      : null;
+  const validUpdated =
+    updated && !Number.isNaN(updated.getTime())
+      ? { iso: snapshot.updatedAt as string, at: updated, confidence: "high" as DateConfidence }
+      : null;
+
+  if (validUpdated && (!validPublished || validUpdated.at >= validPublished.at)) {
+    return { iso: validUpdated.iso, label: "last updated", confidence: validUpdated.confidence };
+  }
+  if (validPublished) {
+    return { iso: validPublished.iso, label: "published", confidence: validPublished.confidence };
+  }
+  return null;
+}
+
 function assessStaleness(
   snapshots: SourceSnapshot[],
   claims: VerifiedClaim[],
@@ -379,11 +426,23 @@ function assessStaleness(
   const day = 86_400_000;
 
   for (const snapshot of snapshots) {
-    if (snapshot.status !== "ok" || !snapshot.publishedAt) continue;
-    const published = new Date(snapshot.publishedAt);
-    if (Number.isNaN(published.getTime())) continue;
-    const ageDays = Math.floor((now.getTime() - published.getTime()) / day);
+    if (snapshot.status !== "ok") continue;
+
+    const signal = freshnessSignal(snapshot);
+    if (!signal) continue;
+
+    const declared = new Date(signal.iso);
+    const ageDays = Math.floor((now.getTime() - declared.getTime()) / day);
     if (ageDays < 365) continue;
+
+    // A page whose own body mentions a year newer than its declared date has
+    // been touched since that date was stamped. Templates, migrations and
+    // copied schema markup all produce these dates, so treat them as no signal.
+    const newestYear = newestYearIn(snapshot.text);
+    if (newestYear !== null && newestYear > declared.getUTCFullYear()) continue;
+
+    // Wikipedia and similar sites stamp the creation date on the article.
+    if (ENCYCLOPEDIA.test(snapshot.domain) && signal.label === "published") continue;
 
     const years = (ageDays / 365).toFixed(1);
     const authority = authorityOf(snapshot);
@@ -391,9 +450,9 @@ function assessStaleness(
       id: `st${findings.length + 1}`,
       title:
         authority === "official"
-          ? `Official page may predate the current cycle (published ${years} years ago)`
-          : `${snapshot.domain} was published ${years} years ago`,
-      detail: `The page carries a ${snapshot.dateConfidence}-confidence publish date of ${published
+          ? `Official page may predate the current cycle (last updated ${years} years ago)`
+          : `${snapshot.domain} was ${signal.label === "last updated" ? "last updated" : "published"} ${years} years ago`,
+      detail: `The page carries a ${signal.confidence}-confidence ${signal.label} date of ${declared
         .toISOString()
         .slice(0, 10)}. Rules, amounts and deadlines may have changed since then.`,
       aspectId: null,
@@ -416,7 +475,7 @@ function assessStaleness(
   }
 
   // Undated pages that only talk about older years.
-  if (!snapshots.some((snapshot) => snapshot.publishedAt)) {
+  if (!snapshots.some((snapshot) => snapshot.publishedAt || snapshot.updatedAt)) {
     const currentYear = now.getUTCFullYear();
     const staleYear = snapshots
       .filter((snapshot) => snapshot.status === "ok")

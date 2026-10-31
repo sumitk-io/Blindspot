@@ -4,9 +4,13 @@
  *   npx tsx scripts/save-demo.mts
  *   npx tsx scripts/save-demo.mts "Your question" https://a.example https://b.example
  */
-import { writeFileSync } from "node:fs";
-import { buildSnapshot } from "../lib/snapshot.ts";
-import { analyze } from "../lib/pipeline/analyze.ts";
+import nextEnv from "@next/env";
+
+nextEnv.loadEnvConfig(process.cwd());
+
+const { writeFileSync } = await import("node:fs");
+const { buildSnapshot } = await import("../lib/snapshot.ts");
+const { analyze } = await import("../lib/pipeline/analyze.ts");
 
 const question =
   process.argv[2]?.trim() ||

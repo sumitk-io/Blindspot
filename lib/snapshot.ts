@@ -14,6 +14,7 @@ export interface SourceSnapshot {
   fetchedAt: string;
   publishedAt: string | null;
   dateConfidence: DateConfidence;
+  updatedAt: string | null;
   contentType: string;
   bytes: number;
   truncated: boolean;
@@ -51,6 +52,7 @@ export function failedSnapshot(
     fetchedAt: new Date().toISOString(),
     publishedAt: null,
     dateConfidence: "none",
+    updatedAt: null,
     contentType: "",
     bytes: 0,
     truncated: false,
@@ -83,6 +85,7 @@ export function snapshotFromText(text: string, label: string): SourceSnapshot {
     fetchedAt: new Date().toISOString(),
     publishedAt: null,
     dateConfidence: "none",
+    updatedAt: null,
     contentType: "text/plain",
     bytes: Buffer.byteLength(cleaned, "utf8"),
     truncated: false,
@@ -117,6 +120,8 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
           byline: null,
           publishedAt: null,
           dateConfidence: "none" as DateConfidence,
+          updatedAt: null,
+          updatedConfidence: "none" as DateConfidence,
         }
       : extractFromHtml(fetched.text, finalUrl, fetched.lastModified);
 
@@ -133,6 +138,7 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
         fetchedAt,
         publishedAt: extracted.publishedAt,
         dateConfidence: extracted.dateConfidence,
+        updatedAt: extracted.updatedAt,
         contentType: fetched.contentType,
         bytes: fetched.bytes,
         truncated: fetched.truncated,
@@ -155,6 +161,7 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
       fetchedAt,
       publishedAt: extracted.publishedAt,
       dateConfidence: extracted.dateConfidence,
+      updatedAt: extracted.updatedAt,
       contentType: fetched.contentType,
       bytes: fetched.bytes,
       truncated: fetched.truncated,
@@ -174,6 +181,7 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
         fetchedAt,
         publishedAt: null,
         dateConfidence: "none",
+        updatedAt: null,
         contentType: "",
         bytes: 0,
         truncated: false,
@@ -195,6 +203,7 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
       fetchedAt,
       publishedAt: null,
       dateConfidence: "none",
+      updatedAt: null,
       contentType: "",
       bytes: 0,
       truncated: false,
