@@ -31,6 +31,36 @@ function domainOf(url: string): string {
 }
 
 /**
+ * Build a failed snapshot for a source we already know cannot be read.
+ * Keeps the matrix honest without retrying a dead link.
+ */
+export function failedSnapshot(
+  rawUrl: string,
+  code: FetchErrorCode,
+  message: string,
+): SourceSnapshot {
+  return {
+    id: randomUUID(),
+    url: rawUrl,
+    finalUrl: rawUrl,
+    domain: domainOf(rawUrl),
+    title: domainOf(rawUrl),
+    siteName: null,
+    text: "",
+    sha256: "",
+    fetchedAt: new Date().toISOString(),
+    publishedAt: null,
+    dateConfidence: "none",
+    contentType: "",
+    bytes: 0,
+    truncated: false,
+    status: "failed",
+    errorCode: code,
+    errorMessage: message,
+  };
+}
+
+/**
  * Fetch a URL and freeze everything a finding might later point at:
  * cleaned text, content hash, fetch time and the best available date.
  * Never throws: a failed source is returned with a status and a reason.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -8,6 +8,7 @@ import {
   FileText,
   Info,
   Link2,
+  LoaderCircle,
   Plus,
   Search,
   Shield,
@@ -25,6 +26,7 @@ interface DraftSource {
   url: string;
   authority: Authority;
   status: "checking" | "ok" | "failed";
+  code?: string;
   note?: string;
   title?: string;
 }
@@ -32,24 +34,24 @@ interface DraftSource {
 const initialSources: DraftSource[] = [
   {
     id: "d1",
-    domain: "nsp.gov.in",
-    url: "https://nsp.gov.in",
+    domain: "chevening.org",
+    url: "https://www.chevening.org/scholarships/",
     authority: "official",
-    status: "ok",
+    status: "checking",
   },
   {
     id: "d2",
-    domain: "scholarshiphub.org",
-    url: "https://scholarshiphub.org",
+    domain: "en.wikipedia.org",
+    url: "https://en.wikipedia.org/wiki/Scholarship",
     authority: "secondary",
-    status: "ok",
+    status: "checking",
   },
   {
     id: "d3",
-    domain: "collegepedia.edu",
-    url: "https://collegepedia.edu",
-    authority: "secondary",
-    status: "ok",
+    domain: "gatescambridge.org",
+    url: "https://www.gatescambridge.org/",
+    authority: "official",
+    status: "checking",
   },
 ];
 
@@ -100,6 +102,8 @@ export default function AskPage() {
   const [pasteMode, setPasteMode] = useState(false);
   const [pastedText, setPastedText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const started = useRef(false);
 
   async function verifySource(id: string, url: string) {
     try {
@@ -110,7 +114,7 @@ export default function AskPage() {
       });
       const payload = (await response.json()) as {
         ok: boolean;
-        snapshot?: { domain: string; title: string; errorMessage?: string };
+        snapshot?: { domain: string; title: string; errorCode?: string; errorMessage?: string };
       };
 
       setSources((current) =>
@@ -121,6 +125,7 @@ export default function AskPage() {
                 status: payload.ok ? "ok" : "failed",
                 domain: payload.snapshot?.domain ?? source.domain,
                 title: payload.snapshot?.title,
+                code: payload.snapshot?.errorCode,
                 note: payload.ok ? undefined : (payload.snapshot?.errorMessage ?? "Could not read"),
               }
             : source,
@@ -180,7 +185,14 @@ export default function AskPage() {
     setSources((current) => current.filter((source) => source.id !== id));
   }
 
-  function analyze() {
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    for (const source of initialSources) void verifySource(source.id, source.url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function analyze() {
     if (!question.trim()) {
       setError("Add a question first.");
       return;
@@ -193,7 +205,48 @@ export default function AskPage() {
       setError("Wait until every source finishes checking.");
       return;
     }
-    router.push("/analysis/demo");
+
+    setAnalyzing(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: question.trim(),
+          sources: sources.map((source) =>
+            source.status === "failed"
+              ? {
+                  url: source.url,
+                  failed: {
+                    code: source.code ?? "NETWORK_ERROR",
+                    message: source.note ?? "This source could not be read.",
+                  },
+                }
+              : { url: source.url },
+          ),
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        code?: string;
+        analysis?: unknown;
+      };
+
+      if (!response.ok || !payload.ok || !payload.analysis) {
+        setError(payload.message ?? "The analysis could not be completed.");
+        return;
+      }
+
+      sessionStorage.setItem("blindspot:live", JSON.stringify(payload));
+      router.push("/analysis/live");
+    } catch {
+      setError("Could not reach the analyzer. Check your connection and try again.");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   return (
@@ -376,11 +429,16 @@ export default function AskPage() {
         <button
           type="button"
           onClick={analyze}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 py-3.5 text-base font-semibold text-white transition hover:bg-brand-dark"
+          disabled={analyzing}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 py-3.5 text-base font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <Search className="size-5" aria-hidden="true" />
-          Analyze sources
-          <ArrowRight className="size-5" aria-hidden="true" />
+          {analyzing ? (
+            <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Search className="size-5" aria-hidden="true" />
+          )}
+          {analyzing ? "Reading sources and verifying quotes…" : "Analyze sources"}
+          {analyzing ? null : <ArrowRight className="size-5" aria-hidden="true" />}
         </button>
 
         <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-missing">
@@ -406,8 +464,8 @@ export default function AskPage() {
       />
 
       <p className={cn("mt-6 text-center text-xs leading-relaxed text-muted")}>
-        This build runs on a saved demo result. Live analysis will call Gemini server-side, and no
-        source text leaves your browser session.
+        Every claim is checked against the saved page text before it appears. Pages are read
+        server-side for this request only and are never stored.
       </p>
     </div>
   );
