@@ -12,6 +12,7 @@ export type FetchErrorCode =
   | "HTTP_ERROR"
   | "TOO_LARGE"
   | "UNSUPPORTED_CONTENT_TYPE"
+  | "EMPTY_CONTENT"
   | "REDIRECT_LOOP"
   | "NETWORK_ERROR";
 
@@ -203,7 +204,13 @@ export async function safeFetch(
       if (error instanceof Error && error.name === "TimeoutError") {
         throw new FetchError("TIMEOUT", "The source took too long to respond.");
       }
-      throw new FetchError("NETWORK_ERROR", "Could not connect to this source.");
+      const cause = (error as { cause?: { code?: string } }).cause?.code;
+      throw new FetchError(
+        "NETWORK_ERROR",
+        cause
+          ? `Could not connect to this source (${cause}).`
+          : "Could not connect to this source.",
+      );
     }
 
     if (response.status >= 300 && response.status < 400) {

@@ -22,13 +22,35 @@ import { cn } from "@/lib/utils";
 interface DraftSource {
   id: string;
   domain: string;
+  url: string;
   authority: Authority;
+  status: "checking" | "ok" | "failed";
+  note?: string;
+  title?: string;
 }
 
 const initialSources: DraftSource[] = [
-  { id: "d1", domain: "nsp.gov.in", authority: "official" },
-  { id: "d2", domain: "scholarshiphub.org", authority: "secondary" },
-  { id: "d3", domain: "collegepedia.edu", authority: "secondary" },
+  {
+    id: "d1",
+    domain: "nsp.gov.in",
+    url: "https://nsp.gov.in",
+    authority: "official",
+    status: "ok",
+  },
+  {
+    id: "d2",
+    domain: "scholarshiphub.org",
+    url: "https://scholarshiphub.org",
+    authority: "secondary",
+    status: "ok",
+  },
+  {
+    id: "d3",
+    domain: "collegepedia.edu",
+    url: "https://collegepedia.edu",
+    authority: "secondary",
+    status: "ok",
+  },
 ];
 
 const examples = [
@@ -79,17 +101,52 @@ export default function AskPage() {
   const [pastedText, setPastedText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  async function verifySource(id: string, url: string) {
+    try {
+      const response = await fetch("/api/fetch-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        snapshot?: { domain: string; title: string; errorMessage?: string };
+      };
+
+      setSources((current) =>
+        current.map((source) =>
+          source.id === id
+            ? {
+                ...source,
+                status: payload.ok ? "ok" : "failed",
+                domain: payload.snapshot?.domain ?? source.domain,
+                title: payload.snapshot?.title,
+                note: payload.ok ? undefined : (payload.snapshot?.errorMessage ?? "Could not read"),
+              }
+            : source,
+        ),
+      );
+    } catch {
+      setSources((current) =>
+        current.map((source) =>
+          source.id === id
+            ? { ...source, status: "failed", note: "Could not check this link." }
+            : source,
+        ),
+      );
+    }
+  }
+
   function addSource() {
     const raw = newUrl.trim();
     if (!raw) {
       setError("Add a link or cancel.");
       return;
     }
-    let domain: string;
+    let parsedUrl: URL;
     try {
-      const parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-      if (!/^https?:$/.test(parsed.protocol)) throw new Error("bad scheme");
-      domain = parsed.hostname.replace(/^www\./, "");
+      parsedUrl = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+      if (!/^https?:$/.test(parsedUrl.protocol)) throw new Error("bad scheme");
     } catch {
       setError("That does not look like a web link.");
       return;
@@ -98,13 +155,25 @@ export default function AskPage() {
       setError("Six sources is the limit for one analysis.");
       return;
     }
+
+    const domain = parsedUrl.hostname.replace(/^www\./, "");
+    const normalized = parsedUrl.toString();
+    const id = `d${Date.now()}`;
+
     setSources((current) => [
       ...current,
-      { id: `d${Date.now()}`, domain, authority: inferAuthority(domain) },
+      {
+        id,
+        domain,
+        url: normalized,
+        authority: inferAuthority(domain),
+        status: "checking",
+      },
     ]);
     setNewUrl("");
     setAddingSource(false);
     setError(null);
+    void verifySource(id, normalized);
   }
 
   function removeSource(id: string) {
@@ -118,6 +187,10 @@ export default function AskPage() {
     }
     if (sources.length === 0) {
       setError("Add at least one source.");
+      return;
+    }
+    if (sources.some((source) => source.status === "checking")) {
+      setError("Wait until every source finishes checking.");
       return;
     }
     router.push("/analysis/demo");
@@ -204,10 +277,24 @@ export default function AskPage() {
           {sources.map((source) => (
             <div
               key={source.id}
-              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3"
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-4 py-3",
+                source.status === "failed" ? "border-conflict/40 bg-rose-50/40" : "border-line",
+              )}
             >
               <Link2 className="size-4 shrink-0 text-missing" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate text-sm text-ink">{source.domain}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-ink">{source.domain}</p>
+                {source.status === "checking" ? (
+                  <p className="text-xs text-muted">Checking the page…</p>
+                ) : null}
+                {source.status === "ok" && source.title ? (
+                  <p className="truncate text-xs text-muted">{source.title}</p>
+                ) : null}
+                {source.status === "failed" ? (
+                  <p className="truncate text-xs text-conflict">{source.note}</p>
+                ) : null}
+              </div>
               <AuthorityBadge authority={source.authority} />
               <button
                 type="button"

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "smoke:fetch": "node --no-warnings scripts/smoke-fetch.mts"
+    "smoke:fetch": "node --no-warnings scripts/smoke-fetch.mts",
+    "smoke:extract": "tsx scripts/smoke-extract.mts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
@@ -31,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.5"
   }
