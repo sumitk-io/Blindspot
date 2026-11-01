@@ -501,7 +501,7 @@ export default function AskPage() {
             id="question"
             value={question}
             maxLength={2000}
-            rows={3}
+            rows={4}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder={SUGGESTED_QUESTION}
             className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-base text-ink outline-none placeholder:text-missing"
@@ -512,7 +512,7 @@ export default function AskPage() {
         </div>
 
         {/* Sources */}
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-6 flex items-center justify-between gap-3">
           <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
             Sources
             <Info
@@ -520,33 +520,31 @@ export default function AskPage() {
               aria-label="Only pages you add are fetched. Nothing is stored."
             />
           </span>
-          {sources.length > 0 ? (
-            <span className="text-xs text-muted">
-              {sources.length}/6
-            </span>
-          ) : null}
+          <div className="flex items-center gap-3">
+            {sources.length > 0 ? (
+              <span className="text-xs text-muted">{sources.length}/6</span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setPasteMode((value) => !value);
+                if (!pasteMode) setPastedLabel(null);
+              }}
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand-soft/70"
+            >
+              <ClipboardPaste className="size-4" aria-hidden="true" />
+              {pasteMode ? "Use links instead" : "Paste text instead"}
+            </button>
+          </div>
         </div>
 
         {/* The honest limitation, stated up front. Many official sites block bots. */}
-        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-brand/25 bg-brand-soft p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2.5">
-            <Info className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-            <p className="text-sm leading-relaxed text-ink-soft">
-              Some websites block automated access. For reliable analysis, copy the relevant
-              webpage content and paste it directly.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setPasteMode((value) => !value);
-              if (!pasteMode) setPastedLabel(null);
-            }}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
-          >
-            <ClipboardPaste className="size-4" aria-hidden="true" />
-            {pasteMode ? "Use links instead" : "Paste text instead"}
-          </button>
+        <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-soft px-4 py-3">
+          <Info className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+          <p className="text-sm leading-relaxed text-ink-soft">
+            Some websites may block automated access. If a page doesn&apos;t load, you can copy
+            its content and paste it instead.
+          </p>
         </div>
 
         <div className="mt-3 space-y-2">
