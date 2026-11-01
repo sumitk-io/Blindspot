@@ -1,342 +1,311 @@
-<div align="center">
-
+::: {align="center"}
 # Blindspot
 
 **Find out what your sources don't tell you.**
 
-An information-gap auditor for the web. Paste a question and a few links — Blindspot shows what the sources cover, what they miss, where they disagree, and what you should verify next, with every claim tied to a verified quote.
+An AI-assisted information-gap auditor that reveals missing details,
+conflicting claims, and outdated information across multiple
+sources---with evidence users can verify.
 
-Built for **SHINCHAN Online Hackathon 2026** · *Digital Dark Spot — AI-Assisted Information Gap Detection Platform*
+**SHINCHAN Online Hackathon 2026** · *Digital Dark Spot --- AI-Assisted
+Information Gap Detection Platform*
+:::
 
-</div>
+------------------------------------------------------------------------
 
-![Blindspot — Ask screen](docs/front-1-ask.png)
+## The Problem
 
-![Blindspot — Analysis dashboard with coverage matrix, findings and verification checklist](docs/front-2-dashboard.png)
+People often make decisions using information scattered across multiple
+websites. Search engines help find pages, and AI summarizers condense
+them, but neither reliably shows whether the collected sources answer
+the complete question.
 
----
+Important details can remain hidden:
 
-## The problem
+-   An eligibility page does not mention renewal conditions.
+-   Two sources list different required documents.
+-   A page describes an earlier application cycle.
+-   None of the reviewed sources states a deadline.
 
-People make decisions about scholarships, visas, jobs and public services using information scattered across several websites. Search finds pages and summarizers condense pages, but neither tells you **what is missing**. A page can be accurate, current and confident while still not answering the question you actually need answered.
+A conventional AI answer may make incomplete information sound complete.
+**Blindspot is designed to surface these gaps instead of filling them
+with assumptions.**
 
-The dangerous failures are quiet ones:
+## The Solution
 
-- an eligibility page that never mentions renewal conditions;
-- two pages listing different required documents;
-- a blog describing last year's application cycle;
-- no source at all stating the deadline.
+Blindspot takes a research question and a set of source URLs, then
+audits how well those sources address the question.
 
-A fluent AI answer hides these holes by filling them with plausible text. Blindspot is built to do the opposite: to **surface absence**, and to prove every finding it reports.
+It produces an evidence-based report showing:
 
-## What Blindspot does
+1.  **Coverage matrix** --- which sources address each aspect of the
+    question.
+2.  **Verified key facts** --- extracted claims with their original
+    source quotations.
+3.  **Potential information gaps** --- aspects not addressed by the
+    reviewed sources, presented as unanswered questions.
+4.  **Conflicting claims** --- disagreements between sources, shown with
+    their supporting evidence.
+5.  **Outdated information warnings** --- old, undated, or potentially
+    expired information.
+6.  **Verification checklist** --- prioritized suggestions for what to
+    check next and where to look.
 
-Given a question and a set of sources, it produces:
+> **Important:** A gap means that information was not found in the
+> sources reviewed. It does not prove that the information does not
+> exist elsewhere.
 
-1. **A coverage matrix** — every source scored against every aspect a complete answer would need.
-2. **Key facts found** — verified statements, each with its quote and source.
-3. **Gaps** — aspects no reviewed source addresses, phrased as unanswered questions.
-4. **Conflicts** — aspects where sources disagree, shown side by side with authority and date.
-5. **Staleness and deadline warnings** — old cycles, undated pages, deadlines already passed.
-6. **A prioritized verification checklist** — what to check next, ranked, with a "where to look" hint.
-7. **An explicit confidence state** — a run with unreadable sources or rejected quotes is marked *reduced confidence*, never silently smoothed over.
-8. **An exportable JSON report** with quotes, URLs, fetch dates and content hashes.
+## Key Features
 
-## The core idea: the coverage matrix
+  -----------------------------------------------------------------------
+  Feature                             What it does
+  ----------------------------------- -----------------------------------
+  Multi-source analysis               Reads and analyzes multiple
+                                      user-provided web pages.
 
-<empty cells are gaps, ⚠ marks a conflict; the example below is illustrative.
+  Coverage matrix                     Maps sources against the important
+                                      aspects of a question.
 
-```
-                 Eligibility  Deadline  Documents  Renewal  Process  Amount
-nsp.gov.in           ●●●        ●●●       ●●●        ○○○      ●●●      ●●●     official
-scholarshiphub.org   ●●●        ●●○       ●●●        ○○○      ●●○      ○○○     secondary
-collegepedia.edu     ●●●        ●●●       ⚠⚠◐        ○○○      ●●●      ●●○     secondary
-forumthread.io       ●●○        ○○○       ○○○        ○○○      ○○○      ○○○     community
-                     ────────────────────────────────────────────────────
-                    covered     covered   CONFLICT    GAP     partial  partial
-```
+  Evidence-linked findings            Shows source quotations for
+                                      extracted claims.
 
-The grid is the product. Gaps are empty columns, conflicts are cells where verified claims disagree, staleness is per-source metadata. Everything else — the findings list, the checklist rank, the confidence state — is derived from it.
+  Quote verification                  Rejects claims whose supporting
+                                      quotation cannot be located in the
+                                      source text.
 
-## How it works
+  Conflict detection                  Highlights cases where sources
+                                      provide different information.
 
-| # | Stage | What happens | Decided by |
-|---|---|---|---|
-| 1 | **Aspect decomposition** | The question is expanded into 3–6 aspects with search keywords. A generic set is used if the model is unavailable. | LLM, code fallback |
-| 2 | **Fetch and snapshot** | The URL is validated, private hosts are blocked, redirects are followed manually, size and time are capped, then readable text is extracted and frozen: `sha256`, `fetchedAt`, detected date and confidence. | Code |
-| 3 | **Chunk and retrieve** | Text is split into sentence-aligned chunks (~1,200 chars, ~200 overlap). Each aspect retrieves its best chunks by lexical BM25-style scoring, so no extra API calls are spent. | Code |
-| 4 | **Claim extraction** | One model call receives every source excerpt plus the aspect list, and must return `{ sourceId, aspectId, statement, quote }` with quotes copied character-for-character. | LLM |
-| 5 | **Quote verification** | Each quote is located in the frozen text: exact, then NFKC-folded (curly quotes, dashes, NBSP, whitespace), then fuzzy with ≥90 % token containment. A quote that cannot be found is **discarded**, and a claim attributed to the wrong source is reassigned if another source contains it. | Code |
-| 6 | **Coverage scoring** | Covered / partial / missing, computed from verified claims only, weighted by quote length and whether the quote carries a number or date. | Code |
-| 7 | **Conflict detection** | Typed values (percentage, money, date, duration) are compared in code; the model is asked only to adjudicate the remaining text claims, one batched call. | Code first, LLM to confirm |
-| 8 | **Staleness** | Publish date from JSON-LD → meta tags → `<time>` → visible text, each with a confidence label. `Last-Modified` is deliberately ignored as a publish signal. Plus a deadline-passed check. | Code |
-| 9 | **Checklist ranking** | Conflicts rank above gaps, gaps above staleness, staleness above retrying a failed link. Each item carries a "where to look" hint. | Code |
+  Freshness checks                    Flags old, undated pages and passed
+                                      deadlines where detectable.
 
-Two design rules run through the whole pipeline:
+  Verification checklist              Recommends the next facts and
+                                      sources users should verify.
 
-- **Deterministic first, LLM second.** The model extracts and classifies; code decides. Anything computable without a model is computed without one.
-- **Partial success is normal.** A failed source never fails the analysis. It appears as an unavailable row with a reason, and the run is marked reduced confidence.
+  Confidence indicators               Makes unreadable sources and
+                                      reduced-confidence results visible.
 
-A run costs at most three model calls regardless of source count, which keeps a free-tier key usable.
+  JSON export                         Lets users save the analysis
+                                      report.
 
-## Why the quote verifier matters
+  Demo scenario                       Loads a saved example without
+                                      making live AI model calls.
+  -----------------------------------------------------------------------
 
-Most "AI research" tools cite by generating a plausible reference. Blindspot inverts the trust model:
+## How It Works
 
-1. The model may only answer with **quotations from supplied text**.
-2. The server independently checks that each quote exists in the stored snapshot.
-3. If verification fails — because the quote was paraphrased, invented, or mismatched — the claim is **discarded before it can affect any score**.
+Blindspot uses a structured analysis pipeline:
 
-This means the product visibly distrusts its own model, and a judge can falsify any finding by opening the source. It is also the cheapest possible defence against the most common LLM failure mode.
+1.  **Question decomposition:** Breaks the research question into
+    smaller, checkable aspects.
+2.  **Source fetching:** Validates URLs, reads accessible pages, and
+    extracts their main content.
+3.  **Relevant passage retrieval:** Splits page text into sentence-based
+    chunks and ranks relevant passages.
+4.  **Claim extraction:** Uses Gemini to identify claims and their
+    supporting quotations.
+5.  **Quote verification:** Independently checks whether each quotation
+    exists in the original extracted text. Unverified claims are
+    discarded.
+6.  **Coverage analysis:** Classifies each source/aspect combination as
+    covered, partial, missing, conflicting, or unavailable.
+7.  **Conflict and freshness checks:** Identifies disagreements and
+    checks available date information.
+8.  **Next-step ranking:** Creates a prioritized checklist to guide
+    further verification.
 
-Verification is deliberately forgiving about formatting (curly vs straight quotes, non-breaking spaces, dashes, line breaks) and strict about substance: a quote must be nearly fully contained in the source, so a rewritten sentence fails.
+### The Trust Mechanism
 
-## Trust model: what each state means
+The most important part of Blindspot is its **independent quote
+verifier**.
 
-There are no "AI says" rows in the interface. A cell is one of five states, and only one of them comes from the model at all:
+The language model may extract a claim, but it cannot make that claim
+count as evidence by itself. The application checks the quotation
+against the saved text of the source. If the quotation cannot be
+located, the claim is rejected.
 
-| State | Meaning | Produced by |
-|---|---|---|
-| **Covered** | Two strong verified quotes, or one quote with a concrete value | Code, over verified quotes |
-| **Partial** | A verified but thin statement | Code, over verified quotes |
-| **Conflict** | Verified claims from two sources cannot both be true | Code, then one model adjudication pass |
-| **Missing** | No verified statement about this aspect in any readable source | Code |
-| **Unavailable** | The source could not be read, so nothing can be concluded about it | Code |
+This reduces fabricated citations and makes findings easier for users
+and judges to audit. Quote verification confirms that a quotation exists
+in a source; it does not prove that the source itself is correct.
 
-A gap always carries the caveat: *missing among the sources reviewed — not necessarily absent from the world.* When a source failed, the gap text says so explicitly.
+## What Makes Blindspot Different?
 
-## Safety and privacy
+  -----------------------------------------------------------------------
+  Existing approach                   Main limitation
+  ----------------------------------- -----------------------------------
+  Search engines                      Find information, but do not
+                                      measure whether sources cover all
+                                      important aspects.
 
-Feeding arbitrary web pages into a model and fetching arbitrary user URLs are both untrusted operations, so both are treated as such.
+  Summarizers                         Condense available information, but
+                                      do not systematically identify
+                                      omissions.
 
-**Server-side request forgery (SSRF).** All fetching goes through one guarded function: scheme allowlist (`http`/`https` only), credential and port rejection, DNS resolution followed by checks against loopback, private, link-local, CGNAT and IPv6 equivalents, manual redirects with the guard re-run on every hop, an 8–10 s timeout and a hard 2 MB cap. Known limitation: DNS rebinding is not fully solved by an address check alone; the production fix is connecting to the pre-validated IP through a custom dispatcher.
+  General AI chatbots                 Can produce fluent answers that may
+                                      hide uncertainty or unsupported
+                                      assumptions.
 
-**Prompt injection.** Fetched text is untrusted data: it is passed inside explicit delimiters, the system instruction states that nothing inside them is an instruction, model output can never trigger a fetch or tool call, all output is schema-validated, and the local quote verifier remains the final authority.
+  **Blindspot**                       Audits source coverage, verifies
+                                      quotations, highlights
+                                      disagreements, and guides users on
+                                      what to verify next.
+  -----------------------------------------------------------------------
 
-**XSS.** Source text and quotes are rendered as text nodes with highlighted spans — never `dangerouslySetInnerHTML`.
+**Our approach: We don't just answer the question. We audit the
+answering.**
 
-**Secrets.** The Gemini key lives in `.env.local` (gitignored), is read only inside route handlers, and is never sent to the browser. `.env.example` ships with an empty value. `git check-ignore` confirms the real file is excluded.
+## Technology Stack
 
-**Abuse control.** Per-IP analysis limit, a global daily cap, and per-request caps (max sources, question length, total text). Limits return a friendly message pointing to demo mode rather than an error.
+  -------------------------------------------------------------------------
+  Layer                   Technology                Purpose
+  ----------------------- ------------------------- -----------------------
+  Application             Next.js 16, React 19      Frontend and
+                                                    server-side API routes
 
-**Privacy.** No database and no source text in production logs. A run exists only in the browser session and in an export the user chooses to download.
+  Language                TypeScript                Application logic and
+                                                    shared data types
 
-## Source handling
+  Styling                 Tailwind CSS v4           Responsive user
+                                                    interface
 
-Every URL failure is a typed code with a human message, so one bad link never poisons a run.
+  AI integration          Google Gemini,            Question decomposition,
+                          `@google/genai`           claim extraction, and
+                                                    conflict analysis
 
-| Code | User sees | Next action |
-|---|---|---|
-| `INVALID_URL` | "This does not look like a valid link" | fix the link |
-| `UNSUPPORTED_SCHEME` | "Only http and https links are supported" | use a web link |
-| `CREDENTIALS_IN_URL` | "Links with a username or password are not allowed" | remove them |
-| `BLOCKED_PORT` | "This port is not allowed" | use a standard web port |
-| `BLOCKED_HOST` | "This address cannot be fetched for security reasons" | use a public URL |
-| `DNS_FAIL` | "Could not find this website" | check the address |
-| `TIMEOUT` | "Reading this source took longer than 24 seconds" | retry, or paste the text |
-| `HTTP_ERROR` | "This site blocks automated reading (HTTP 403)" · "This page no longer exists (HTTP 404)" · "rate-limiting (HTTP 429)" · "server error (HTTP 5xx)" | open in a browser and paste the text |
-| `UNSUPPORTED_CONTENT_TYPE` | "PDF files cannot be read yet" or the content type named | paste the text |
-| `EMPTY_CONTENT` | "builds its content with JavaScript" · "only N words of readable text — a placeholder or link index" | paste the text |
-| `REDIRECT_LOOP` | "This link redirects in a loop" | use the final URL |
-| `NETWORK_ERROR` | "Could not connect to this source (CODE)" | retried once automatically, then paste the text |
+  Web content extraction  `@mozilla/readability`,   Extracting readable
+                          `jsdom`                   main content from web
+                                                    pages
 
-Each URL gets a **12 s socket timeout** and a **24 s total budget** covering every redirect hop, so a slow host or a redirect chain cannot hold a request open. Every rejection is logged server-side as one structured `[blindspot:fetch]` line with the URL, hop, status and elapsed time, so a failed source can be traced to a single cause instead of a generic message. Transient socket resets are retried once.
+  Validation              Zod                       Validating model
+                                                    responses and API data
 
-Pages larger than 2 MB are truncated rather than rejected, and the snapshot records `truncated: true`. A short page is still treated as readable; it only fails when there is too little text to audit. A **paste-text** path exists for every source, so a blocked page is never a dead end.
+  Retrieval               Custom BM25-style lexical Ranking relevant
+                          scoring                   passages without a
+                                                    vector database
 
-## How this differs from existing tools
+  Evidence verification   Custom TypeScript quote   Checking extracted
+                          verifier                  quotations against
+                                                    source text
 
-| Tool | What it does | What it cannot do |
-|---|---|---|
-| Search engines | find pages | no notion of completeness |
-| Summarizers | condense what exists | cannot report what is absent |
-| Chat assistants | produce a fluent answer | fill gaps with plausible text |
-| Deep-research agents | write a report | optimise for narrative coherence, not auditability |
-| NotebookLM-style tools | Q&A over your documents | no gap model, no conflict ledger, no staleness |
-| **Blindspot** | **audits coverage of a question by a source set** | doesn't pretend to know the answer |
+  Security                Custom URL/SSRF guard     Restricting unsafe URLs
+                                                    and redirects
 
-The positioning in one line: **we don't answer the question, we audit the answering.** The LLM is a component under an evidence system, not the product.
+  Client-side session     `sessionStorage`          Holding the current
+                                                    analysis in the browser
+  -------------------------------------------------------------------------
 
-## Tech stack
+### Why This Architecture?
 
-- **Next.js 16** (App Router, Cache Components) + **React 19** + **TypeScript** + **Tailwind CSS v4**
-- **`@google/genai`** — Gemini for aspect decomposition, claim extraction and conflict adjudication
-- **`@mozilla/readability`** + **`jsdom`** for article extraction
-- **Zod** for validating every model response and API payload
-- **No database, no vector store, no agent framework** — a run is one JSON object held in the browser session
+-   The language model is used for language-understanding tasks;
+    deterministic code handles retrieval, quote verification, and
+    coverage calculations.
+-   The analysis uses at most three Gemini calls, helping control
+    latency and API usage.
+-   No vector database or agent framework is required.
+-   No application database is used; analysis is held in the browser
+    session and can be exported as JSON.
 
-Retrieval inside a source is lexical (BM25-style scoring over sentence chunks) rather than embedding-based: it is deterministic, costs no API calls, and keeps the per-analysis budget at three model calls.
+## Getting Started
 
-Model IDs live in `lib/gemini.ts` with a fallback chain, because provider model IDs change.
+### Prerequisites
 
-**Why each of these choices was made, in terms of the problem statement, is documented in [`TECH-STACK.md`](TECH-STACK.md).**
+-   Node.js and npm
+-   A Google Gemini API key from [Google AI
+    Studio](https://aistudio.google.com/apikey)
 
-## Getting started
+### 1. Clone the repository
 
-```bash
+``` bash
 git clone https://github.com/sumitk-io/Blindspot.git
 cd Blindspot
+```
+
+### 2. Install dependencies
+
+``` bash
 npm install --legacy-peer-deps
 ```
 
-Create `.env.local` from the example and add your key:
+### 3. Configure the environment
 
-```bash
-cp .env.example .env.local        # macOS / Linux
-Copy-Item .env.example .env.local # Windows PowerShell
+Create a `.env.local` file in the project root and add your Gemini API
+key:
+
+``` env
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-```dotenv
-GEMINI_API_KEY=your_key_here
-# optional
-GEMINI_MODEL=
-DAILY_ANALYSIS_CAP=200
+Keep this key private. Do not commit `.env.local` to GitHub.
+
+### 4. Run the development server
+
+``` bash
+npm run dev
 ```
 
-Run it:
+Open <http://localhost:3000> in your browser.
 
-```bash
-npm run dev        # http://localhost:3000
-npm run smoke:all   # guarded fetch + quote verifier + pipeline + rate limits
-npm run build       # production build
+### 5. Run checks and build
+
+``` bash
+npm run smoke:all
+npm run build
 ```
 
-Get a free key at [Google AI Studio](https://aistudio.google.com/apikey). The key is read server-side only; it never reaches the browser.
+## Demo Mode
 
-### Deploying
+Blindspot includes a saved demo scenario that loads a previously
+generated analysis.
 
-Import the repo into Vercel, add `GEMINI_API_KEY` as an environment variable, deploy. Adding or changing a variable requires a redeploy. Set the route's `maxDuration` to match your plan's limits, and confirm the library bundling works on serverless before relying on it.
-
-## Demo mode
-
-The **Load demo scenario** button opens a **pre-saved analysis result** produced by an earlier real run, committed to the repository. It makes **zero** model calls.
-
-That is a deliberate reliability decision, not a shortcut: the demo still works with an exhausted quota, a dead venue network, or a provider outage. A badge distinguishes *Demo — saved result* from *Live analysis*, so the claim is never misleading.
-
-The saved run is regenerated with:
-
-```bash
-npm run demo:save -- "Your question" https://source-a.example https://source-b.example
-```
-
-which fetches the sources, runs the full pipeline and writes `lib/demo-saved.json`.
-
-## Project structure
-
-```
-app/
-  page.tsx                     landing page
-  ask/page.tsx                 question + sources, live page checking, paste-text fallback
-  analysis/[id]/page.tsx       saved demo dashboard (/analysis/demo)
-  analysis/live/page.tsx       live dashboard, read from sessionStorage
-  api/analyze/route.ts         snapshots → pipeline → AnalysisData
-  api/fetch-source/route.ts    URL → snapshot preview (title, words, date)
-components/
-  analysis-view.tsx            coverage matrix, findings, checklist, evidence
-  landing/…, ask/…             design-matched UI
-lib/
-  safe-fetch.ts                URL validation, SSRF guard, size/time caps
-  extract.ts                   readability + metadata + date confidence
-  snapshot.ts                  frozen source: text, sha256, dates, failure reason
-  gemini.ts                    client, model fallback, JSON parsing and retries
-  rate-limit.ts                per-IP and daily caps
-  pipeline/
-    text.ts                    chunking, retrieval, quote verification, value extraction
-    model-stages.ts            aspects, claims, conflict audit
-    analyze.ts                 coverage, conflicts, staleness, checklist, evidence
-scripts/
-  smoke-*.mts                  executable checks (see Testing)
-  save-demo.mts                freezes a real run as the demo
-docs/                          screenshots used in this README
-```
-
-## Output contract
-
-One type, `AnalysisData` in `lib/types.ts`, shared by server and client:
-
-```ts
-type AnalysisData = {
-  question: string;
-  statusLine: string;        // "3 of 3 sources read · 14 quotes verified"
-  reducedConfidence: boolean;
-  sources: Source[];         // domain, url, authority, status, failure note
-  aspects: Aspect[];         // id, label, icon, tint
-  cells: Cell[];             // aspectId × sourceId → covered | partial | conflict | missing | unavailable
-  findings: Finding[];       // gap | conflict | outdated
-  checklist: ChecklistItem[];// text, whereToLook, priority
-  evidence: Evidence;        // best verified quote + sha256 + counts
-};
-```
-
-Only claims whose quote was located in the frozen source text can influence `cells`, `findings` or `evidence`.
-
-## Testing
-
-The deterministic core is tested by runnable scripts, because that is where correctness is provable:
-
-```bash
-npm run smoke:fetch     # 12 URL-guard cases against live and hostile input
-npm run smoke:text      # quote verifier, chunking, typed-value extraction
-npm run smoke:pipeline  # full analysis with stubbed model calls, plus degradation
-npm run smoke:limits    # per-IP window and daily cap
-```
-
-Covered explicitly:
-
-- **URL guard** — loopback, private ranges, link-local and cloud-metadata addresses, bad schemes, credentials in URL, disallowed ports, redirects
-- **Quote verifier** — exact match, curly quotes, non-breaking spaces, collapsed whitespace, a dropped word (fuzzy), and rejection of a fabricated quote and of quotes shorter than 24 characters
-- **Pipeline** — verified/rejected counts, coverage states, numeric and date conflicts, passed deadlines, old pages, gap wording, checklist ranking, evidence selection
-- **Degradation** — when the model call throws, sentence-level extraction keeps the matrix populated and the run is marked reduced confidence
-- **Rate limits** — sixth request in an hour blocked, daily cap enforced, window reset
-
-The model stages themselves are validated by Zod schemas, quote verification and the saved demo result rather than by asserting exact strings.
+-   It makes **zero Gemini API calls**.
+-   It can be used when the API quota is unavailable or live source
+    fetching is unreliable.
+-   It is clearly labelled as a saved demo result, separate from live
+    analysis.
 
 ## Limitations
 
-Stated plainly, because a credibility claim is stronger with its boundaries visible:
+-   Some websites block automated access or depend heavily on
+    JavaScript. Users can paste source text when a page cannot be read.
+-   Analysis is limited to the sources supplied or successfully
+    accessed.
+-   "Missing" means missing from the reviewed sources, not necessarily
+    from the wider web.
+-   Date detection is heuristic; pages without detectable dates may be
+    marked undated.
+-   A conflict indicates disagreement between sources. Blindspot does
+    not automatically establish which source is correct.
+-   Quote verification reduces fabricated citations, but cannot
+    eliminate every possible model interpretation error.
+-   PDF and DOCX ingestion are not currently supported by the
+    source-reading pipeline.
 
-- **Aspects bound the search.** The tool can only find gaps it knew to look for. Domain templates and user-editable aspects mitigate this, but they do not remove it.
-- **Coverage is source-limited.** Six pages about a topic are not the internet. "Missing" means missing here.
-- **Date extraction is heuristic.** A page with no machine-readable date and no visible date is honestly marked *undated*, not guessed.
-- **Conflicts are disagreements, not verdicts.** The tool shows that sources differ and who is more authoritative; it does not establish truth.
-- **LLM error is mitigated, not eliminated.** Quote verification removes hallucinated citations; it cannot fix a model that misreads a real sentence.
-- **Free-tier quotas are finite.** Hence demo mode and rate limits.
+## Future Scope
 
-## Roadmap
+-   PDF and DOCX source ingestion.
+-   Shareable, frozen analysis reports.
+-   Re-checking sources when their content changes.
+-   Scheduled monitoring of information gaps and conflicts.
+-   Cross-lingual source analysis.
+-   More domain-specific templates, such as scholarships, admissions,
+    visas, and public services.
+-   Search API integration for discovering relevant sources
+    automatically.
+-   Evaluation against manually labelled examples to measure
+    gap-detection quality.
 
-- PDF and DOCX ingestion through the same snapshot contract
-- Shareable, frozen analysis permalinks
-- Re-check: compare stored hashes to detect when a source changed
-- Scheduled monitoring — which cells filled in or broke since last month
-- Cross-lingual sources
-- More domain templates: visas, admissions, tender specs, medical guidance
-- Browser extension to add an open tab as a source
-- Search-API source discovery
-- Calibration report — precision and recall of gap detection against a hand-labelled set
+## Project Links
 
-## Hackathon mapping
-
-| Expected outcome in the brief | Where it lives |
-|---|---|
-| Enter a topic, question or research goal | Ask screen |
-| Add or collect sources | URL input, paste-text fallback, demo snapshots |
-| Structured summary of key information | Key facts section with quote per fact |
-| Gaps and unanswered questions | Gap findings + matrix empty cells |
-| Contradictions with references | Conflict findings with side-by-side quotes |
-| Outdated or undated warnings | Staleness and deadline checks |
-| Prioritized verification checklist | Ranked checklist with where-to-look hints |
-| Dashboard separating sourced / AI / uncertainty | Coverage states (covered, partial, conflict, missing, unavailable) with verified quotes |
-
-Judging guidance from the brief is respected literally: findings are labelled as potential gaps, not facts; every important finding exposes its source reference; and the gap-detection workflow — not a chat window — is the demonstration.
-
-## Name
-
-The name currently appears in `app/layout.tsx` (metadata), the landing page and header components, and `package.json`. Renaming is a small, contained change.
+-   **GitHub Repository:** <https://github.com/sumitk-io/Blindspot>
+-   **Live Demo:** Add deployment URL when available.
+-   **Demo Video:** Add walkthrough link when available.
 
 ## License
 
-MIT — see `LICENSE`.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
-## Acknowledgement
+------------------------------------------------------------------------
 
-Built solo for the SHINCHAN Online Hackathon 2026. The scholarship scenario is illustrative; sample sources are clearly identified as samples, not as authoritative guidance.
+::: {align="center"}
+**Blindspot --- Find out what your sources don't tell you.**
+:::
