@@ -32,6 +32,25 @@ function domainOf(url: string): string {
 }
 
 /**
+ * Say why a page produced nothing usable. "Needs JavaScript" is the wrong
+ * diagnosis for a perfectly readable stub, and that mislabel is what made every
+ * link failure look identical.
+ */
+function emptyContentMessage(extractedText: string, rawBody: string): string {
+  const words = extractedText.split(/\s+/).filter(Boolean).length;
+
+  if (words === 0) {
+    return rawBody.trim().length > 0
+      ? "This page builds its content with JavaScript, so the text is not in the HTML. Open it in a browser and paste the text instead."
+      : "The source returned an empty document.";
+  }
+  if (words < 40) {
+    return `This page has only ${words} words of readable text — it looks like a placeholder, a link index or a stub, so there is nothing to audit.`;
+  }
+  return `Only ${words} words of readable text could be extracted, which is too little to audit.`;
+}
+
+/**
  * Build a failed snapshot for a source we already know cannot be read.
  * Keeps the matrix honest without retrying a dead link.
  */
@@ -103,6 +122,29 @@ export function snapshotFromText(text: string, label: string): SourceSnapshot {
  * Never throws: a failed source is returned with a status and a reason.
  */
 export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
+  const startedAt = Date.now();
+  const snapshot = await buildSnapshotInner(rawUrl);
+  const words = snapshot.text ? snapshot.text.split(/\s+/).filter(Boolean).length : 0;
+  const event = {
+    event: snapshot.status === "ok" ? "snapshot_ok" : "snapshot_failed",
+    domain: snapshot.domain,
+    status: snapshot.status,
+    code: snapshot.errorCode,
+    words,
+    elapsedMs: Date.now() - startedAt,
+    message: snapshot.errorMessage,
+  };
+
+  if (snapshot.status !== "ok") {
+    console.warn(`[blindspot:snapshot] ${JSON.stringify(event)}`);
+  } else if (words < 200 || event.elapsedMs > 3_000) {
+    console.info(`[blindspot:snapshot] ${JSON.stringify(event)}`);
+  }
+
+  return snapshot;
+}
+
+async function buildSnapshotInner(rawUrl: string): Promise<SourceSnapshot> {
   const id = randomUUID();
   const fetchedAt = new Date().toISOString();
 
@@ -125,7 +167,14 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
         }
       : extractFromHtml(fetched.text, finalUrl, fetched.lastModified);
 
-    if (extracted.text.length < 300) {
+    // A short page is still a readable page. Only reject it when there is too
+    // little text to audit, so a link index or a cookie wall is not treated the
+    // same as a valid but brief document.
+    const words = extracted.text.split(/\s+/).filter(Boolean).length;
+    const readableEnough =
+      extracted.text.length >= 300 || (words >= 15 && extracted.text.length >= 120);
+
+    if (!readableEnough) {
       return {
         id,
         url: rawUrl,
@@ -144,8 +193,7 @@ export async function buildSnapshot(rawUrl: string): Promise<SourceSnapshot> {
         truncated: fetched.truncated,
         status: "failed",
         errorCode: "EMPTY_CONTENT",
-        errorMessage:
-          "No readable text found. The page may need JavaScript, or it may be behind a login.",
+        errorMessage: emptyContentMessage(extracted.text, fetched.text),
       };
     }
 

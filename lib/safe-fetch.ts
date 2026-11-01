@@ -56,11 +56,61 @@ const ALLOWED_CONTENT = [
 ];
 
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
-const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_TIMEOUT_MS = 12_000;
+/** Hard ceiling for one logical fetch, including every redirect hop. */
+const DEFAULT_BUDGET_MS = 24_000;
 const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+/** Only these are worth a second attempt; a contended timeout should not be retried. */
+const RETRYABLE = new Set<FetchErrorCode>(["NETWORK_ERROR"]);
+const SLOW_FETCH_MS = 3_000;
 
 const USER_AGENT =
   "BlindspotBot/1.0 (source auditor; +https://github.com/sumitk-io/Blindspot)";
+
+/**
+ * Server-side trace for link ingestion. Every failure carries the URL, the
+ * redirect hop, the status and the elapsed time, so a "could not load" report
+ * can be traced to one cause instead of guessing.
+ */
+function logFetch(level: "info" | "warn", event: Record<string, unknown>) {
+  const line = `[blindspot:fetch] ${JSON.stringify(event)}`;
+  if (level === "warn") console.warn(line);
+  else console.info(line);
+}
+
+function httpErrorMessage(status: number): string {
+  if (status === 401 || status === 403) {
+    return `This site blocks automated reading (HTTP ${status}). Open it in a browser and paste the text instead.`;
+  }
+  if (status === 404 || status === 410) {
+    return `This page no longer exists (HTTP ${status}). Check the link.`;
+  }
+  if (status === 429) {
+    return "This site is rate-limiting requests (HTTP 429). Wait a minute and try again.";
+  }
+  if (status >= 500) {
+    return `The site returned a server error (HTTP ${status}). Try again later.`;
+  }
+  return `The source returned HTTP ${status}.`;
+}
+
+const PDF_MESSAGE =
+  "PDF files cannot be read yet. Open the file and paste its text instead.";
+
+function isPdfMagic(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 export interface FetchedSource {
   text: string;
@@ -179,63 +229,165 @@ async function readCapped(
 /**
  * Fetch a user-supplied URL under guard: public addresses only, limited redirects,
  * bounded time and size, and a narrow content-type allowlist.
+ *
+ * The timeout is a per-attempt socket timeout; `budgetMs` caps the whole chain so
+ * a redirect loop or a slow host can never hold a request open indefinitely.
  */
 export async function safeFetch(
   raw: string,
-  options: { maxBytes?: number; timeoutMs?: number } = {},
+  options: { maxBytes?: number; timeoutMs?: number; budgetMs?: number } = {},
 ): Promise<FetchedSource> {
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const budgetMs = options.budgetMs ?? DEFAULT_BUDGET_MS;
+  const startedAt = Date.now();
+  const deadline = startedAt + budgetMs;
 
   let current = await assertPublicUrl(raw);
+  const visited = new Set<string>([current.toString()]);
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    let response: Response;
-    try {
-      response = await fetch(current, {
-        redirect: "manual",
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-          "User-Agent": USER_AGENT,
-          Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
-        },
+    const remaining = deadline - Date.now();
+    if (remaining < 750) {
+      logFetch("warn", {
+        event: "budget_exhausted",
+        url: raw,
+        hop,
+        elapsedMs: Date.now() - startedAt,
+        budgetMs,
       });
-    } catch (error) {
-      if (error instanceof Error && error.name === "TimeoutError") {
-        throw new FetchError("TIMEOUT", "The source took too long to respond.");
-      }
-      const cause = (error as { cause?: { code?: string } }).cause?.code;
       throw new FetchError(
-        "NETWORK_ERROR",
-        cause
-          ? `Could not connect to this source (${cause}).`
-          : "Could not connect to this source.",
+        "TIMEOUT",
+        `Reading this source took longer than ${Math.round(budgetMs / 1000)} seconds. Try again, or paste the text instead.`,
       );
     }
 
-    if (response.status >= 300 && response.status < 400) {
+    const attemptTimeout = Math.min(timeoutMs, remaining);
+    let response: Response | null = null;
+    let lastError: FetchError | null = null;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const hopStarted = Date.now();
+      try {
+        response = await fetch(current, {
+          redirect: "manual",
+          signal: AbortSignal.timeout(attemptTimeout),
+          headers: {
+            "User-Agent": USER_AGENT,
+            Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+          },
+        });
+        break;
+      } catch (error) {
+        const isTimeout = error instanceof Error && error.name === "TimeoutError";
+        const name = error instanceof Error ? error.name : "UnknownError";
+        const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+        const detail = cause?.code ?? cause?.message ?? name;
+
+        logFetch("warn", {
+          event: isTimeout ? "hop_timeout" : "hop_error",
+          url: current.toString(),
+          hop,
+          attempt: attempt + 1,
+          elapsedMs: Date.now() - hopStarted,
+          timeoutMs: attemptTimeout,
+          detail,
+        });
+
+        lastError = isTimeout
+          ? new FetchError(
+              "TIMEOUT",
+              "The source did not respond in time. It may be slow, or it may be blocking automated readers.",
+            )
+          : new FetchError("NETWORK_ERROR", `Could not connect to this source (${detail}).`);
+
+        // A dropped socket is worth one retry; a timeout is not.
+        const canRetry =
+          RETRYABLE.has(lastError.code) &&
+          attempt === 0 &&
+          deadline - Date.now() > 1_500;
+        if (!canRetry) break;
+        await sleep(250);
+      }
+    }
+
+    if (!response) {
+      throw lastError ?? new FetchError("NETWORK_ERROR", "Could not connect to this source.");
+    }
+
+    if (REDIRECT_STATUSES.has(response.status)) {
       const location = response.headers.get("location");
       if (!location) {
+        throw new FetchError("HTTP_ERROR", "The source returned a redirect without a destination.");
+      }
+
+      let next: URL;
+      try {
+        next = new URL(location, current);
+      } catch {
         throw new FetchError("HTTP_ERROR", "The source returned an invalid redirect.");
       }
-      current = await assertPublicUrl(new URL(location, current).toString());
+
+      const nextUrl = next.toString();
+      if (visited.has(nextUrl)) {
+        logFetch("warn", {
+          event: "redirect_loop",
+          url: raw,
+          hop,
+          target: nextUrl,
+          elapsedMs: Date.now() - startedAt,
+        });
+        throw new FetchError("REDIRECT_LOOP", "This link redirects in a loop.");
+      }
+      visited.add(nextUrl);
+
+      // Re-validate every hop so a redirect cannot reach an internal address.
+      current = await assertPublicUrl(nextUrl);
       continue;
     }
 
     if (!response.ok) {
-      throw new FetchError("HTTP_ERROR", `The source returned HTTP ${response.status}.`);
+      logFetch("warn", {
+        event: "http_error",
+        url: current.toString(),
+        hop,
+        status: response.status,
+        elapsedMs: Date.now() - startedAt,
+      });
+      throw new FetchError("HTTP_ERROR", httpErrorMessage(response.status));
     }
 
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
     const baseType = contentType.split(";")[0].trim();
-    if (baseType && !ALLOWED_CONTENT.includes(baseType)) {
-      throw new FetchError(
-        "UNSUPPORTED_CONTENT_TYPE",
-        `This content type cannot be read (${baseType}).`,
-      );
+
+    if (baseType === "application/pdf") {
+      logFetch("warn", { event: "pdf_rejected", url: current.toString(), baseType });
+      throw new FetchError("UNSUPPORTED_CONTENT_TYPE", PDF_MESSAGE);
+    }
+
+    if (baseType && baseType !== "application/octet-stream" && !ALLOWED_CONTENT.includes(baseType)) {
+      logFetch("warn", { event: "content_type_rejected", url: current.toString(), baseType });
+      throw new FetchError("UNSUPPORTED_CONTENT_TYPE", `This content type cannot be read (${baseType}).`);
     }
 
     const { bytes, truncated } = await readCapped(response, maxBytes);
+
+    // Some servers serve a PDF as application/octet-stream; check the signature.
+    if (isPdfMagic(bytes)) {
+      logFetch("warn", { event: "pdf_magic_rejected", url: current.toString(), baseType });
+      throw new FetchError("UNSUPPORTED_CONTENT_TYPE", PDF_MESSAGE);
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs > SLOW_FETCH_MS) {
+      logFetch("info", {
+        event: "slow_fetch",
+        url: current.toString(),
+        elapsedMs,
+        bytes: bytes.byteLength,
+      });
+    }
+
     const charset =
       charsetFromContentType(contentType) ?? charsetFromBody(bytes) ?? "utf-8";
 
@@ -251,5 +403,6 @@ export async function safeFetch(
     };
   }
 
+  logFetch("warn", { event: "too_many_redirects", url: raw, elapsedMs: Date.now() - startedAt });
   throw new FetchError("REDIRECT_LOOP", "Too many redirects.");
 }

@@ -119,8 +119,26 @@ export default function AskPage() {
       });
       const payload = (await response.json()) as {
         ok: boolean;
+        durationMs?: number;
         snapshot?: { domain: string; title: string; errorCode?: string; errorMessage?: string };
       };
+
+      if (!response.ok) {
+        setSources((current) =>
+          current.map((source) =>
+            source.id === id
+              ? {
+                  ...source,
+                  status: "failed",
+                  note:
+                    payload.snapshot?.errorMessage ??
+                    `The source could not be checked (HTTP ${response.status}).`,
+                }
+              : source,
+          ),
+        );
+        return;
+      }
 
       setSources((current) =>
         current.map((source) =>
@@ -136,11 +154,17 @@ export default function AskPage() {
             : source,
         ),
       );
-    } catch {
+    } catch (error) {
       setSources((current) =>
         current.map((source) =>
           source.id === id
-            ? { ...source, status: "failed", note: "Could not check this link." }
+            ? {
+                ...source,
+                status: "failed",
+                note: `Could not check this link. ${
+                  error instanceof Error ? error.message.slice(0, 120) : "The request failed."
+                }`,
+              }
             : source,
         ),
       );
@@ -390,7 +414,7 @@ export default function AskPage() {
                   <p className="truncate text-xs text-muted">{source.title}</p>
                 ) : null}
                 {source.status === "failed" ? (
-                  <p className="truncate text-xs text-conflict">{source.note}</p>
+                  <p className="text-xs text-conflict">{source.note}</p>
                 ) : null}
               </div>
               <AuthorityBadge authority={source.authority} />

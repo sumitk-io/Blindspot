@@ -373,14 +373,24 @@ const DEADLINE_HINT = /\b(deadline|last date|closing date|closes|apply by|due da
 /** Sites that keep a creation date forever while the body is edited daily. */
 const ENCYCLOPEDIA = /(^|\.)(wikipedia\.org|wiktionary\.org|wikiwand\.com|britannica\.com|fandom\.com)$/;
 
-function newestYearIn(text: string): number | null {
+/**
+ * The newest date in the page body that has already happened. If that is later
+ * than the date the page claims for itself, the page has been edited since, and
+ * its declared date is not a freshness signal. A future date does not count: a
+ * 2019 page mentioning a 2026 deadline is still a 2019 page.
+ */
+function newestPastDate(text: string, now: Date): Date | null {
+  const cutoff = now.getTime();
   let newest: number | null = null;
-  for (const match of text.matchAll(/\b(19\d{2}|20\d{2})\b/g)) {
-    const year = Number(match[1]);
-    if (year < 1990 || year > 2100) continue;
-    if (newest === null || year > newest) newest = year;
+
+  for (const value of extractValues(text)) {
+    if (value.kind !== "date") continue;
+    const at = new Date(value.normalized).getTime();
+    if (Number.isNaN(at) || at > cutoff) continue;
+    if (newest === null || at > newest) newest = at;
   }
-  return newest;
+
+  return newest === null ? null : new Date(newest);
 }
 
 interface DateSignal {
@@ -435,11 +445,12 @@ function assessStaleness(
     const ageDays = Math.floor((now.getTime() - declared.getTime()) / day);
     if (ageDays < 365) continue;
 
-    // A page whose own body mentions a year newer than its declared date has
-    // been touched since that date was stamped. Templates, migrations and
-    // copied schema markup all produce these dates, so treat them as no signal.
-    const newestYear = newestYearIn(snapshot.text);
-    if (newestYear !== null && newestYear > declared.getUTCFullYear()) continue;
+    // A page whose body refers to something more than a year after its declared
+    // date has clearly been maintained since, so the declared date is metadata at
+    // best. Templates, migrations and copied schema markup all produce these
+    // dates, and reporting them as "outdated" would be a false alarm.
+    const liveSince = newestPastDate(snapshot.text, now);
+    if (liveSince && liveSince.getTime() - declared.getTime() > 365 * day) continue;
 
     // Wikipedia and similar sites stamp the creation date on the article.
     if (ENCYCLOPEDIA.test(snapshot.domain) && signal.label === "published") continue;

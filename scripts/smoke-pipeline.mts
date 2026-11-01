@@ -20,6 +20,7 @@ function snapshot(partial: Partial<SourceSnapshot> & Pick<SourceSnapshot, "id" |
     fetchedAt: "2026-11-20T09:00:00.000Z",
     publishedAt: null,
     dateConfidence: "none",
+    updatedAt: null,
     contentType: "text/html",
     bytes: partial.text.length,
     truncated: false,
@@ -48,7 +49,7 @@ const secondary = snapshot({
   publishedAt: "2019-03-05T00:00:00.000Z",
   dateConfidence: "high",
   text: [
-    "Applications close on 15 November 2026 according to our guide.",
+    "Applications close on 15 November 2019 according to our guide.",
     "Applicants must submit an income certificate and a bank statement.",
     "A student may receive up to 75% of the tuition fee.",
   ].join("\n\n"),

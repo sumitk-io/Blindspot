@@ -133,14 +133,16 @@ Every URL failure is a typed code with a human message, so one bad link never po
 | `BLOCKED_PORT` | "This port is not allowed" | use a standard web port |
 | `BLOCKED_HOST` | "This address cannot be fetched for security reasons" | use a public URL |
 | `DNS_FAIL` | "Could not find this website" | check the address |
-| `TIMEOUT` | "The source took too long to respond" | retry, or paste the text |
-| `HTTP_ERROR` | "The source returned HTTP 403/404" | check the link, or paste the text |
-| `UNSUPPORTED_CONTENT_TYPE` | "This content type cannot be read" | paste the text |
-| `EMPTY_CONTENT` | "No readable text — the page may need JavaScript" | paste the text |
-| `REDIRECT_LOOP` | "Too many redirects" | use the final URL |
-| `NETWORK_ERROR` | "Could not connect to this source" | retry, or paste the text |
+| `TIMEOUT` | "Reading this source took longer than 24 seconds" | retry, or paste the text |
+| `HTTP_ERROR` | "This site blocks automated reading (HTTP 403)" · "This page no longer exists (HTTP 404)" · "rate-limiting (HTTP 429)" · "server error (HTTP 5xx)" | open in a browser and paste the text |
+| `UNSUPPORTED_CONTENT_TYPE` | "PDF files cannot be read yet" or the content type named | paste the text |
+| `EMPTY_CONTENT` | "builds its content with JavaScript" · "only N words of readable text — a placeholder or link index" | paste the text |
+| `REDIRECT_LOOP` | "This link redirects in a loop" | use the final URL |
+| `NETWORK_ERROR` | "Could not connect to this source (CODE)" | retried once automatically, then paste the text |
 
-Pages larger than 2 MB are truncated rather than rejected, and the snapshot records `truncated: true`. A **paste-text** path exists for every source, so a blocked page is never a dead end.
+Each URL gets a **12 s socket timeout** and a **24 s total budget** covering every redirect hop, so a slow host or a redirect chain cannot hold a request open. Every rejection is logged server-side as one structured `[blindspot:fetch]` line with the URL, hop, status and elapsed time, so a failed source can be traced to a single cause instead of a generic message. Transient socket resets are retried once.
+
+Pages larger than 2 MB are truncated rather than rejected, and the snapshot records `truncated: true`. A short page is still treated as readable; it only fails when there is too little text to audit. A **paste-text** path exists for every source, so a blocked page is never a dead end.
 
 ## How this differs from existing tools
 

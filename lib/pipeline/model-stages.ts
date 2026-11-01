@@ -168,9 +168,43 @@ const AUTHORITY_ORDER: Record<Authority, number> = {
   community: 2,
 };
 
+/**
+ * Programmes that run their own site on an ordinary domain. There is no reliable
+ * way to tell "the programme's own site" from "a site writing about it" by domain
+ * shape, so this list is curated rather than guessed.
+ */
+const OFFICIAL_PROGRAMME_DOMAINS = new Set([
+  "chevening.org",
+  "gatescambridge.org",
+  "fulbright.org",
+  "fulbrightonline.org",
+  "commonwealthscholarships.org",
+  "daad.de",
+  "studyinuk.ac.uk",
+]);
+
+/** TLD shapes that belong to governments, militaries and universities. */
+const OFFICIAL_SUFFIXES = [
+  ".gov",
+  ".mil",
+  ".edu",
+  ".ac.uk",
+  ".edu.au",
+  ".edu.in",
+  ".ac.in",
+  ".nic.in",
+  ".gov.uk",
+  ".gov.in",
+  ".europa.eu",
+];
+
 function authorityOf(source: SourceSnapshot): Authority {
-  const domain = source.domain.toLowerCase();
-  if (/\.(gov|gov\.[a-z]{2}|mil|nic\.in|gov\.uk|europa\.eu)$/.test(domain) || domain.endsWith(".gov")) {
+  const domain = source.domain.toLowerCase().replace(/^www\./, "");
+
+  if (OFFICIAL_SUFFIXES.some((suffix) => domain.endsWith(suffix))) {
+    return "official";
+  }
+  if (OFFICIAL_PROGRAMME_DOMAINS.has(domain)) {
     return "official";
   }
   if (domain.startsWith("docs.") || domain.startsWith("help.") || domain.startsWith("support.")) {

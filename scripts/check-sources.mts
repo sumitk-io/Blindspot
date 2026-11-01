@@ -15,7 +15,7 @@ for (const url of urls) {
     console.log(
       `${snapshot.status.padEnd(11)} ${String(words).padStart(5)}w  pub=${published} (${confidence})  ${url}`,
     );
-    if (snapshot.status !== "ok") console.log(`            reason: ${snapshot.error ?? "unknown"}`);
+    if (snapshot.status !== "ok") console.log(`            reason: ${snapshot.errorMessage ?? "unknown"}`);
   } catch (error) {
     console.log(`ERROR       ${url} :: ${(error as Error).message}`);
   }

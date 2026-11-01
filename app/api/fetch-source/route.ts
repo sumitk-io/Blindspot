@@ -31,14 +31,16 @@ export async function POST(request: Request) {
     );
   }
 
+  const startedAt = Date.now();
   const snapshot = await buildSnapshot(url);
-  const wordCount = snapshot.text ? snapshot.text.split(/\s+/).length : 0;
+  const wordCount = snapshot.text ? snapshot.text.split(/\s+/).filter(Boolean).length : 0;
 
   // The full text stays server-side; the client only needs the preview.
   const { text: _text, ...preview } = snapshot;
 
   return NextResponse.json({
     ok: snapshot.status === "ok",
+    durationMs: Date.now() - startedAt,
     snapshot: { ...preview, wordCount },
   });
 }
