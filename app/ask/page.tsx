@@ -416,21 +416,22 @@ export default function AskPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 pb-4 pt-10">
+    <div className="mx-auto max-w-4xl px-6 pb-4 pt-7">
       <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.28em] text-brand">
+        <p className="inline-flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.24em] text-brand">
+          <span className="h-px w-6 bg-brand/35" aria-hidden="true" />
           Research with evidence
+          <span className="h-px w-6 bg-brand/35" aria-hidden="true" />
         </p>
-        <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
+        <h1 className="mt-2.5 text-[2rem] font-extrabold leading-tight tracking-tight text-ink sm:text-[2.5rem]">
           Know what your sources leave out.
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-muted">
-          Blindspot audits your sources to show what they cover, what&apos;s missing, where they
-          contradict, and what you should verify next.
+        <p className="mx-auto mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
+          Audit your sources to see what&apos;s covered, what&apos;s missing, and what to verify next.
         </p>
       </div>
 
-      <div className="mt-9 rounded-2xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(11,31,51,0.05)] sm:p-8">
+      <div className="mt-6 rounded-xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(11,31,51,0.05)] sm:p-6">
         {/* Question */}
         <div className="flex items-center justify-between">
           <label
@@ -496,23 +497,23 @@ export default function AskPage() {
             ) : null}
           </div>
         </div>
-        <div className="mt-3 rounded-xl border border-line focus-within:border-mint">
+        <div className="mt-2 rounded-lg border border-line focus-within:border-mint">
           <textarea
             id="question"
             value={question}
             maxLength={2000}
-            rows={4}
+            rows={3}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder={SUGGESTED_QUESTION}
-            className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-base text-ink outline-none placeholder:text-missing"
+            className="w-full resize-none rounded-lg bg-transparent px-4 py-2.5 text-base text-ink outline-none placeholder:text-missing"
           />
-          <div className="flex justify-end px-4 pb-2 text-xs text-muted">
+          <div className="flex justify-end px-4 pb-1.5 text-[11px] text-muted">
             {question.length}/2000
           </div>
         </div>
 
         {/* Sources */}
-        <div className="mt-6 flex items-center justify-between gap-3">
+        <div className="mt-5 flex items-center justify-between gap-3">
           <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
             Sources
             <Info
@@ -530,29 +531,29 @@ export default function AskPage() {
                 setPasteMode((value) => !value);
                 if (!pasteMode) setPastedLabel(null);
               }}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand-soft/70"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand transition hover:bg-brand-soft/70"
             >
-              <ClipboardPaste className="size-4" aria-hidden="true" />
+              <ClipboardPaste className="size-3.5" aria-hidden="true" />
               {pasteMode ? "Use links instead" : "Paste text instead"}
             </button>
           </div>
         </div>
 
         {/* The honest limitation, stated up front. Many official sites block bots. */}
-        <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-soft px-4 py-3">
-          <Info className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-          <p className="text-sm leading-relaxed text-ink-soft">
+        <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-brand-soft px-3.5 py-2">
+          <Info className="mt-0.5 size-3.5 shrink-0 text-brand" aria-hidden="true" />
+          <p className="text-[13px] leading-relaxed text-ink-soft">
             Some websites may block automated access. If a page doesn&apos;t load, you can copy
             its content and paste it instead.
           </p>
         </div>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-2.5 space-y-2">
           {sources.map((source) => (
             <div
               key={source.id}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-3",
+                "flex items-center gap-3 rounded-lg border px-3.5 py-2.5",
                 source.status === "failed" ? "border-conflict/40 bg-rose-50/40" : "border-line",
               )}
             >
@@ -592,7 +593,7 @@ export default function AskPage() {
         </div>
 
         {pasteMode ? (
-          <div className="mt-3 rounded-xl border border-line p-3">
+          <div className="mt-2.5 rounded-lg border border-line p-3">
             {pastedLabel ? (
               <div className="mb-2 flex items-center gap-2 px-1">
                 <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
@@ -607,9 +608,9 @@ export default function AskPage() {
               ref={pasteRef}
               value={pastedText}
               onChange={(event) => setPastedText(event.target.value)}
-              rows={6}
+              rows={5}
               placeholder="Paste the page's main content here — the rules, dates, amounts and documents. Navigation menus and cookie notices are ignored."
-              className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm text-ink outline-none placeholder:text-missing"
+              className="w-full resize-none rounded-lg bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-missing"
             />
             <div className="flex items-center justify-between gap-3 px-1">
               <span className="text-xs text-muted">
@@ -628,7 +629,7 @@ export default function AskPage() {
         ) : null}
 
         {addingSource ? (
-          <div className="mt-3 rounded-xl border border-mint bg-canvas p-3">
+          <div className="mt-2.5 rounded-lg border border-mint bg-canvas p-3">
             <div className="flex gap-2">
               <input
                 autoFocus
@@ -667,7 +668,7 @@ export default function AskPage() {
           <button
             type="button"
             onClick={() => setAddingSource(true)}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand/40 py-3 text-sm font-medium text-brand transition hover:bg-brand-soft/50"
+            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-brand/40 py-2.5 text-sm font-medium text-brand transition hover:bg-brand-soft/50"
           >
             <Plus className="size-4" aria-hidden="true" />
             Add source
@@ -684,18 +685,18 @@ export default function AskPage() {
           type="button"
           onClick={analyze}
           disabled={analyzing}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 py-3.5 text-base font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-70"
         >
           {analyzing ? (
-            <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+            <LoaderCircle className="size-[18px] animate-spin" aria-hidden="true" />
           ) : (
-            <Search className="size-5" aria-hidden="true" />
+            <Search className="size-[18px]" aria-hidden="true" />
           )}
           {analyzing ? "Reading sources and verifying quotes…" : "Analyze sources"}
-          {analyzing ? null : <ArrowRight className="size-5" aria-hidden="true" />}
+          {analyzing ? null : <ArrowRight className="size-[18px]" aria-hidden="true" />}
         </button>
 
-        <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-missing">
+        <div className="my-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-missing">
           <span className="h-px flex-1 bg-line" />
           or
           <span className="h-px flex-1 bg-line" />
@@ -704,20 +705,20 @@ export default function AskPage() {
         <button
           type="button"
           onClick={() => router.push("/analysis/demo")}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 px-6 py-3.5 text-base font-semibold text-ink-soft transition hover:bg-slate-200"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 px-6 py-3 text-[15px] font-semibold text-ink-soft transition hover:bg-slate-200"
         >
-          <FileText className="size-5" aria-hidden="true" />
+          <FileText className="size-[18px]" aria-hidden="true" />
           Load demo scenario
         </button>
       </div>
 
       <AspectStrip
         items={aspects}
-        className="px-0 pt-10"
+        className="px-0 pt-6"
         subheading="Your question will be analyzed across these key aspects."
       />
 
-      <p className={cn("mt-6 text-center text-xs leading-relaxed text-muted")}>
+      <p className={cn("mt-4 text-center text-xs leading-relaxed text-muted")}>
         Every claim is checked against the saved page text before it appears. Pages are read
         server-side for this request only and are never stored.
       </p>
@@ -728,7 +729,7 @@ export default function AskPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="fetch-failure-title"
-            className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-xl"
           >
             <div className="flex items-start justify-between gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft">
@@ -752,7 +753,7 @@ export default function AskPage() {
               copying its content and pasting it directly.
             </p>
 
-            <div className="mt-4 rounded-xl bg-canvas px-3 py-2.5">
+            <div className="mt-4 rounded-lg bg-canvas px-3 py-2.5">
               <p className="truncate text-xs font-medium text-ink-soft">{failure.domain}</p>
               <p className="mt-0.5 text-xs leading-relaxed text-muted">{failure.message}</p>
             </div>
