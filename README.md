@@ -169,6 +169,8 @@ Retrieval inside a source is lexical (BM25-style scoring over sentence chunks) r
 
 Model IDs live in `lib/gemini.ts` with a fallback chain, because provider model IDs change.
 
+**Why each of these choices was made, in terms of the problem statement, is documented in [`TECH-STACK.md`](TECH-STACK.md).**
+
 ## Getting started
 
 ```bash

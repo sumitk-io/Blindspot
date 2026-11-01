@@ -1,3 +1,151 @@
 {
-  "savedAt": null
+  "savedAt": "2026-11-01T03:02:54.635Z",
+  "question": "What should students verify before applying for a government scholarship? Check eligibility, income limits, documents, deadlines and renewal rules.",
+  "statusLine": "2 of 2 sources read · 4 quotes verified",
+  "reducedConfidence": false,
+  "sources": [
+    {
+      "id": "b19b836f-4b97-46cc-b87f-544009eb4af6",
+      "domain": "scholarships.gov.in",
+      "url": "https://scholarships.gov.in/",
+      "authority": "official",
+      "status": "ok"
+    },
+    {
+      "id": "72c9d552-2a7f-4147-a76f-b659467b3554",
+      "domain": "en.wikipedia.org",
+      "url": "https://en.wikipedia.org/wiki/Scholarship",
+      "authority": "secondary",
+      "status": "ok"
+    }
+  ],
+  "aspects": [
+    {
+      "id": "eligibility-requirements",
+      "label": "Eligibility requirements",
+      "icon": "users",
+      "tint": "bg-emerald-50 text-emerald-600"
+    },
+    {
+      "id": "income-limits",
+      "label": "Income limits",
+      "icon": "file",
+      "tint": "bg-sky-50 text-sky-600"
+    },
+    {
+      "id": "required-documents",
+      "label": "Required documents",
+      "icon": "file",
+      "tint": "bg-violet-50 text-violet-600"
+    },
+    {
+      "id": "application-deadlines",
+      "label": "Application deadlines",
+      "icon": "calendar",
+      "tint": "bg-amber-50 text-amber-600"
+    },
+    {
+      "id": "renewal-rules",
+      "label": "Renewal rules",
+      "icon": "refresh",
+      "tint": "bg-rose-50 text-rose-600"
+    }
+  ],
+  "cells": [
+    {
+      "aspectId": "eligibility-requirements",
+      "sourceId": "b19b836f-4b97-46cc-b87f-544009eb4af6",
+      "state": "covered"
+    },
+    {
+      "aspectId": "income-limits",
+      "sourceId": "b19b836f-4b97-46cc-b87f-544009eb4af6",
+      "state": "missing"
+    },
+    {
+      "aspectId": "required-documents",
+      "sourceId": "b19b836f-4b97-46cc-b87f-544009eb4af6",
+      "state": "missing"
+    },
+    {
+      "aspectId": "application-deadlines",
+      "sourceId": "b19b836f-4b97-46cc-b87f-544009eb4af6",
+      "state": "covered"
+    },
+    {
+      "aspectId": "renewal-rules",
+      "sourceId": "b19b836f-4b97-46cc-b87f-544009eb4af6",
+      "state": "missing"
+    },
+    {
+      "aspectId": "eligibility-requirements",
+      "sourceId": "72c9d552-2a7f-4147-a76f-b659467b3554",
+      "state": "missing"
+    },
+    {
+      "aspectId": "income-limits",
+      "sourceId": "72c9d552-2a7f-4147-a76f-b659467b3554",
+      "state": "missing"
+    },
+    {
+      "aspectId": "required-documents",
+      "sourceId": "72c9d552-2a7f-4147-a76f-b659467b3554",
+      "state": "missing"
+    },
+    {
+      "aspectId": "application-deadlines",
+      "sourceId": "72c9d552-2a7f-4147-a76f-b659467b3554",
+      "state": "missing"
+    },
+    {
+      "aspectId": "renewal-rules",
+      "sourceId": "72c9d552-2a7f-4147-a76f-b659467b3554",
+      "state": "covered"
+    }
+  ],
+  "findings": [
+    {
+      "id": "g1",
+      "kind": "gap",
+      "title": "No source states income limits",
+      "detail": "None of the 2 readable sources contain a verifiable statement about income limits. No official source covers it, which raises the stakes on confirming it directly."
+    },
+    {
+      "id": "g2",
+      "kind": "gap",
+      "title": "No source states required documents",
+      "detail": "None of the 2 readable sources contain a verifiable statement about required documents. No official source covers it, which raises the stakes on confirming it directly."
+    }
+  ],
+  "checklist": [
+    {
+      "id": "k1",
+      "text": "Confirm income limits directly on scholarships.gov.in",
+      "whereToLook": "Where to look: scholarships.gov.in — official rules, FAQ or notice board",
+      "priority": "High"
+    },
+    {
+      "id": "k2",
+      "text": "Confirm required documents directly on scholarships.gov.in",
+      "whereToLook": "Where to look: scholarships.gov.in — official rules, FAQ or notice board",
+      "priority": "High"
+    }
+  ],
+  "evidence": {
+    "quote": "Closing dates for student application is 31-10-2026 and closing date for institute verification is : 15-11-2026 and closing date for L2 verification is : 30/11/2026",
+    "domain": "scholarships.gov.in",
+    "fetchedAt": "fetched 01 Nov 2026",
+    "sha256": "sha256:a6a65844640f…",
+    "sourceCount": 2,
+    "quoteCount": 4
+  },
+  "diagnostics": {
+    "aspectsFromModel": true,
+    "claimsFromModel": true,
+    "claimsExtracted": 4,
+    "quotesVerified": 4,
+    "quotesRejected": 0,
+    "conflicts": 0,
+    "modelNotes": []
+  }
 }
