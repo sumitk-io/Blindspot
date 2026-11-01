@@ -188,7 +188,7 @@ export default function AnalysisView({
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Scholarship verification</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">{isDemo?"Scholarship verification":"Source analysis"}</h1>
           <p className="mt-2 flex items-center gap-2 text-sm text-muted">
             <span
               className={cn(
