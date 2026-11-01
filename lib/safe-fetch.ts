@@ -63,6 +63,8 @@ const MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 /** Only these are worth a second attempt; a contended timeout should not be retried. */
 const RETRYABLE = new Set<FetchErrorCode>(["NETWORK_ERROR"]);
+/** A socket that closed mid-handshake is transient; a connect timeout is not. */
+const TRANSIENT_DETAIL = /(socket|econnreset|epipe|other side closed)/i;
 const SLOW_FETCH_MS = 3_000;
 
 const USER_AGENT =
@@ -301,9 +303,11 @@ export async function safeFetch(
             )
           : new FetchError("NETWORK_ERROR", `Could not connect to this source (${detail}).`);
 
-        // A dropped socket is worth one retry; a timeout is not.
+        // A dropped socket is worth one retry; a connect timeout is not, because
+        // retrying it only doubles the wait for a host that is already unreachable.
         const canRetry =
           RETRYABLE.has(lastError.code) &&
+          TRANSIENT_DETAIL.test(detail) &&
           attempt === 0 &&
           deadline - Date.now() > 1_500;
         if (!canRetry) break;

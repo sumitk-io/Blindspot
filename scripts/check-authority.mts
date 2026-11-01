@@ -16,9 +16,7 @@ const domains = [
   "forum.example.com",
 ];
 
-let failures = 0;
 for (const domain of domains) {
   const authority = authorityOf({ domain } as SourceSnapshot);
   console.log(`${domain.padEnd(32)} ${authority}`);
-  void failures;
 }

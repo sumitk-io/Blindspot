@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   ChevronDown,
+  ClipboardPaste,
   FileText,
   Info,
   Link2,
   LoaderCircle,
   Plus,
+  RotateCcw,
   Search,
   Shield,
   ShieldCheck,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import AspectStrip from "@/components/aspect-strip";
@@ -33,38 +36,79 @@ interface DraftSource {
   title?: string;
 }
 
-const initialSources: DraftSource[] = [
+interface ExamplePreset {
+  id: string;
+  title: string;
+  question: string;
+  sources: { domain: string; url: string }[];
+}
+
+const examples: ExamplePreset[] = [
   {
-    id: "d1",
-    domain: "chevening.org",
-    url: "https://www.chevening.org/scholarships/",
-    kind: "url",
-    authority: "official",
-    status: "checking",
+    id: "government-scholarships",
+    title: "Government scholarships",
+    question:
+      "What should students verify before applying for a government scholarship? Check eligibility, income limits, documents, deadlines and renewal rules.",
+    sources: [
+      { domain: "scholarships.gov.in", url: "https://scholarships.gov.in/" },
+      { domain: "aicte-india.org", url: "https://www.aicte-india.org/" },
+    ],
   },
   {
-    id: "d2",
-    domain: "en.wikipedia.org",
-    url: "https://en.wikipedia.org/wiki/Scholarship",
-    kind: "url",
-    authority: "secondary",
-    status: "checking",
+    id: "college-admissions",
+    title: "College admissions",
+    question:
+      "What should students verify before participating in JoSAA counselling? Check eligibility, seat allocation, choice filling, fees and withdrawal rules.",
+    sources: [
+      { domain: "josaa.nic.in", url: "https://josaa.nic.in/" },
+      { domain: "jeeadv.ac.in", url: "https://jeeadv.ac.in/" },
+    ],
   },
   {
-    id: "d3",
-    domain: "gatescambridge.org",
-    url: "https://www.gatescambridge.org/",
-    kind: "url",
-    authority: "official",
-    status: "checking",
+    id: "consumer-rights",
+    title: "Consumer rights",
+    question:
+      "What can a student do if an online shopping platform refuses a refund for a defective product? Check consumer rights, return policies and complaint procedures.",
+    sources: [
+      { domain: "consumerhelpline.gov.in", url: "https://consumerhelpline.gov.in/" },
+      { domain: "consumeraffairs.nic.in", url: "https://consumeraffairs.nic.in/" },
+    ],
   },
 ];
 
-const examples = [
-  "What should I verify before applying for this scholarship?",
-  "What are the renewal conditions for this scholarship?",
-  "Which documents are officially required for renewal?",
-];
+const SUGGESTED_QUESTION =
+  "e.g. What should students verify before applying for a government scholarship?";
+
+/**
+ * Failures worth offering the paste fallback for: the site blocked us, timed out,
+ * served nothing readable, or the link is broken. Validation and security stops
+ * are excluded, because pasting would not help.
+ */
+const BLOCKING_CODES = new Set([
+  "HTTP_ERROR",
+  "TIMEOUT",
+  "NETWORK_ERROR",
+  "DNS_FAIL",
+  "EMPTY_CONTENT",
+  "UNSUPPORTED_CONTENT_TYPE",
+  "REDIRECT_LOOP",
+]);
+
+interface FailureState {
+  sourceId: string;
+  url: string;
+  domain: string;
+  code?: string;
+  message: string;
+}
+
+function domainFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 function inferAuthority(domain: string): Authority {
   const value = domain.toLowerCase();
@@ -100,15 +144,27 @@ function AuthorityBadge({ authority }: { authority: Authority }) {
 
 export default function AskPage() {
   const router = useRouter();
-  const [question, setQuestion] = useState(examples[0]);
-  const [sources, setSources] = useState<DraftSource[]>(initialSources);
+  const [question, setQuestion] = useState("");
+  const [sources, setSources] = useState<DraftSource[]>([]);
+  const [examplesOpen, setExamplesOpen] = useState(false);
   const [addingSource, setAddingSource] = useState(false);
   const [newUrl, setNewUrl] = useState("");
   const [pasteMode, setPasteMode] = useState(false);
   const [pastedText, setPastedText] = useState("");
+  const [pastedLabel, setPastedLabel] = useState<string | null>(null);
+  const [failure, setFailure] = useState<FailureState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const started = useRef(false);
+  const pasteRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (!failure) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setFailure(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [failure]);
 
   async function verifySource(id: string, url: string) {
     try {
@@ -124,17 +180,11 @@ export default function AskPage() {
       };
 
       if (!response.ok) {
+        const message =
+          payload.snapshot?.errorMessage ?? `The source could not be checked (HTTP ${response.status}).`;
         setSources((current) =>
           current.map((source) =>
-            source.id === id
-              ? {
-                  ...source,
-                  status: "failed",
-                  note:
-                    payload.snapshot?.errorMessage ??
-                    `The source could not be checked (HTTP ${response.status}).`,
-                }
-              : source,
+            source.id === id ? { ...source, status: "failed", note: message } : source,
           ),
         );
         return;
@@ -154,6 +204,19 @@ export default function AskPage() {
             : source,
         ),
       );
+
+      // Only a genuine failure offers the paste fallback. A slow page that
+      // eventually loads never reaches this branch.
+      const code = payload.snapshot?.errorCode;
+      if (!payload.ok && code && BLOCKING_CODES.has(code)) {
+        setFailure({
+          sourceId: id,
+          url,
+          domain: payload.snapshot?.domain ?? domainFromUrl(url),
+          code,
+          message: payload.snapshot?.errorMessage ?? "The page could not be read.",
+        });
+      }
     } catch (error) {
       setSources((current) =>
         current.map((source) =>
@@ -169,6 +232,53 @@ export default function AskPage() {
         ),
       );
     }
+  }
+
+  function applyExample(example: ExamplePreset) {
+    setExamplesOpen(false);
+    setQuestion(example.question);
+    setError(null);
+    setPasteMode(false);
+    setFailure(null);
+
+    const next: DraftSource[] = example.sources.map((source, index) => ({
+      id: `d${Date.now()}-${index}`,
+      domain: source.domain,
+      url: source.url,
+      kind: "url",
+      authority: inferAuthority(source.domain),
+      status: "checking",
+    }));
+
+    setSources(next);
+    for (const source of next) void verifySource(source.id, source.url);
+  }
+
+  function pasteInsteadOfFailure() {
+    if (!failure) return;
+    setPastedLabel(failure.domain);
+    setFailure(null);
+    setPasteMode(true);
+    setAddingSource(false);
+    setPastedText("");
+    setError(null);
+    // The failed link is being replaced by its text, not kept as a dead entry.
+    setSources((current) => current.filter((source) => source.id !== failure.sourceId));
+    requestAnimationFrame(() => pasteRef.current?.focus());
+  }
+
+  function retryFailedSource() {
+    if (!failure) return;
+    const { sourceId, url } = failure;
+    setFailure(null);
+    setSources((current) =>
+      current.map((source) =>
+        source.id === sourceId
+          ? { ...source, status: "checking", note: undefined, code: undefined }
+          : source,
+      ),
+    );
+    void verifySource(sourceId, url);
   }
 
   function addSource() {
@@ -213,6 +323,8 @@ export default function AskPage() {
 
   function addPastedText() {
     const text = pastedText.trim();
+    const label = pastedLabel?.trim() || "Pasted text";
+
     if (text.length < 300) {
       setError("Paste at least a few paragraphs (about 300 characters) so there is something to audit.");
       return;
@@ -226,15 +338,16 @@ export default function AskPage() {
       ...current,
       {
         id: `p${Date.now()}`,
-        domain: "Pasted text",
+        domain: label,
         url: "pasted-text",
         kind: "text",
         text,
-        authority: "secondary",
+        authority: inferAuthority(label),
         status: "ok",
       },
     ]);
     setPastedText("");
+    setPastedLabel(null);
     setPasteMode(false);
     setError(null);
   }
@@ -242,13 +355,6 @@ export default function AskPage() {
   function removeSource(id: string) {
     setSources((current) => current.filter((source) => source.id !== id));
   }
-
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    for (const source of initialSources) void verifySource(source.id, source.url);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function analyze() {
     if (!question.trim()) {
@@ -333,24 +439,62 @@ export default function AskPage() {
           >
             Your question
           </label>
-          <details className="relative">
-            <summary className="flex cursor-pointer list-none items-center gap-1 text-sm text-muted transition hover:text-ink">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExamplesOpen((value) => !value)}
+              aria-expanded={examplesOpen}
+              aria-haspopup="menu"
+              className="flex items-center gap-1 rounded-lg px-1 py-1 text-sm text-muted transition hover:text-ink"
+            >
               Examples
-              <ChevronDown className="size-4" aria-hidden="true" />
-            </summary>
-            <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-line bg-surface p-2 shadow-lg">
-              {examples.map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  onClick={() => setQuestion(example)}
-                  className="block w-full rounded-lg px-3 py-2 text-left text-sm text-ink-soft transition hover:bg-canvas"
+              <ChevronDown
+                className={cn("size-4 transition", examplesOpen && "rotate-180")}
+                aria-hidden="true"
+              />
+            </button>
+            {examplesOpen ? (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setExamplesOpen(false)}
+                  aria-hidden="true"
+                />
+                <div
+                  role="menu"
+                  className="absolute right-0 z-20 mt-2 w-[22rem] max-w-[calc(100vw-3rem)] rounded-xl border border-line bg-surface p-2 shadow-lg"
                 >
-                  {example}
-                </button>
-              ))}
-            </div>
-          </details>
+                  <p className="px-3 pb-2 pt-1 text-xs uppercase tracking-[0.16em] text-missing">
+                    Load an example
+                  </p>
+                  {examples.map((example) => (
+                    <button
+                      key={example.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => applyExample(example)}
+                      className="block w-full rounded-lg px-3 py-2.5 text-left transition hover:bg-canvas"
+                    >
+                      <span className="block text-sm font-semibold text-ink">{example.title}</span>
+                      <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-muted">
+                        {example.question}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap gap-1">
+                        {example.sources.map((source) => (
+                          <span
+                            key={source.url}
+                            className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand"
+                          >
+                            {source.domain}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
         <div className="mt-3 rounded-xl border border-line focus-within:border-mint">
           <textarea
@@ -359,7 +503,7 @@ export default function AskPage() {
             maxLength={2000}
             rows={3}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask a question about something you need to decide."
+            placeholder={SUGGESTED_QUESTION}
             className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-base text-ink outline-none placeholder:text-missing"
           />
           <div className="flex justify-end px-4 pb-2 text-xs text-muted">
@@ -376,12 +520,31 @@ export default function AskPage() {
               aria-label="Only pages you add are fetched. Nothing is stored."
             />
           </span>
+          {sources.length > 0 ? (
+            <span className="text-xs text-muted">
+              {sources.length}/6
+            </span>
+          ) : null}
+        </div>
+
+        {/* The honest limitation, stated up front. Many official sites block bots. */}
+        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-brand/25 bg-brand-soft p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2.5">
+            <Info className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+            <p className="text-sm leading-relaxed text-ink-soft">
+              Some websites block automated access. For reliable analysis, copy the relevant
+              webpage content and paste it directly.
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setPasteMode((value) => !value)}
-            className="flex items-center gap-1.5 text-sm font-medium text-brand transition hover:text-brand-dark"
+            onClick={() => {
+              setPasteMode((value) => !value);
+              if (!pasteMode) setPastedLabel(null);
+            }}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
           >
-            <FileText className="size-4" aria-hidden="true" />
+            <ClipboardPaste className="size-4" aria-hidden="true" />
             {pasteMode ? "Use links instead" : "Paste text instead"}
           </button>
         </div>
@@ -432,11 +595,22 @@ export default function AskPage() {
 
         {pasteMode ? (
           <div className="mt-3 rounded-xl border border-line p-3">
+            {pastedLabel ? (
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
+                  {pastedLabel}
+                </span>
+                <span className="text-xs text-muted">
+                  Replacing the link we could not read
+                </span>
+              </div>
+            ) : null}
             <textarea
+              ref={pasteRef}
               value={pastedText}
               onChange={(event) => setPastedText(event.target.value)}
-              rows={5}
-              placeholder="Paste the text of a page that cannot be fetched. It will be treated as a snapshot."
+              rows={6}
+              placeholder="Paste the page's main content here — the rules, dates, amounts and documents. Navigation menus and cookie notices are ignored."
               className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm text-ink outline-none placeholder:text-missing"
             />
             <div className="flex items-center justify-between gap-3 px-1">
@@ -549,6 +723,63 @@ export default function AskPage() {
         Every claim is checked against the saved page text before it appears. Pages are read
         server-side for this request only and are never stored.
       </p>
+
+      {failure ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fetch-failure-title"
+            className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft">
+                <TriangleAlert className="size-5 text-brand" aria-hidden="true" />
+              </span>
+              <button
+                type="button"
+                onClick={() => setFailure(null)}
+                aria-label="Close"
+                className="rounded-md p-1 text-missing transition hover:bg-canvas hover:text-ink"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <h2 id="fetch-failure-title" className="mt-4 text-xl font-semibold tracking-tight text-ink">
+              We couldn&apos;t access this webpage.
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              Some websites restrict automated reading. You can still analyze this source by
+              copying its content and pasting it directly.
+            </p>
+
+            <div className="mt-4 rounded-xl bg-canvas px-3 py-2.5">
+              <p className="truncate text-xs font-medium text-ink-soft">{failure.domain}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{failure.message}</p>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+              <button
+                type="button"
+                onClick={pasteInsteadOfFailure}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              >
+                <ClipboardPaste className="size-4" aria-hidden="true" />
+                Paste text instead
+              </button>
+              <button
+                type="button"
+                onClick={retryFailedSource}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-ink-soft transition hover:bg-canvas"
+              >
+                <RotateCcw className="size-4" aria-hidden="true" />
+                Retry URL
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
